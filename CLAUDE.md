@@ -44,6 +44,25 @@ student_records/{studentId}/answers/{questionId}
   attempt_count, correct_count, wrong_count, last_answered
 ```
 
+### 單元清單與歷年出題比率
+
+`src/utils/units.js` 是全站的單元資料唯一來源，包含：
+- **UNITS**：9 個單元、38 章完整清單，每個 unit 含 `exam_ratio`（112年7校綜合比率）
+- **UNIT_MAP**：`{ unitId → unit }` 快速查找表
+- **SCHOOL_RATIOS**：各校（中國、慈濟、義守、高醫、清華、中興、中山）歷年各單元出題比率，供模擬考「依目標學校比率」功能使用
+
+| Unit | 中文 | 章節 | 綜合比率 |
+|------|------|------|---------|
+| Unit 1 | 細胞生物學 | Ch1–3 | 10% |
+| Unit 2 | 動物構造和功能 | Ch4–14 | 21% |
+| Unit 3 | 巨分子及生物化學 | Ch15–16 | 8% |
+| Unit 4 | 分子生物學 | Ch17–23 | 17% |
+| Unit 5 | DNA生物科技 | Ch24–25 | 4% |
+| Unit 6 | 微生物免疫學 | Ch26–27 | 14% |
+| Unit 7 | 植物生物學 | Ch28–30 | 8% |
+| Unit 8 | 演化學 | Ch31–34 | 11% |
+| Unit 9 | 生態學 | Ch35–38 | 7% |
+
 ### 頁面路由對應
 
 | 路徑 | 頁面 | 說明 |
