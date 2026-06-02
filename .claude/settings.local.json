@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(extract-text \"G:\\\\我的雲端硬碟\\\\學科\\\\生物\\\\生物總復習\\\\單元題庫解析\\\\Unit1_解析報告.docx\")",
+      "Read(//c/Users/chm/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/a4ec5315-0092-4863-bfe3-c9806a9d08c6/07188566-2bb4-412d-98aa-27db3b7d9993/skills/docx/**)",
+      "Bash(python scripts/office/unpack.py \"G:\\\\我的雲端硬碟\\\\學科\\\\生物\\\\生物總復習\\\\單元題庫解析\\\\Unit1_解析報告.docx\" unpacked_unit1/)",
+      "Bash(pandoc \"G:\\\\我的雲端硬碟\\\\學科\\\\生物\\\\生物總復習\\\\單元題庫解析\\\\Unit1_解析報告.docx\" -t plain)"
+    ]
+  }
+}

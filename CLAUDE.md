@@ -1,0 +1,83 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## 專案簡介
+
+**後中醫生物學線上測驗平台** — 供後中醫考試學生進行生物學單元測驗與模擬考，支援即時題目解析、個人作答紀錄追蹤。老師可上傳 .docx 題庫卷自動匯入題目。
+
+## 常用指令
+
+```bash
+npm install          # 安裝相依套件
+npm run dev          # 啟動本機開發伺服器（預設 http://localhost:5173）
+npm run build        # 打包正式版（輸出至 dist/）
+npm run preview      # 本機預覽打包結果
+```
+
+> 沒有測試框架，目前以手動瀏覽器測試為主。
+
+## 環境變數設定
+
+複製 `.env.example` 為 `.env.local`，填入 Firebase 專案設定值（全部以 `VITE_FIREBASE_` 開頭）。  
+Firebase 金鑰透過 GitHub Secrets 注入 CI/CD，不可寫入程式碼。
+
+## 架構說明
+
+### 技術棧
+- **前端**：React 18 + Vite + Tailwind CSS
+- **路由**：React Router v6（`BrowserRouter`，basename = `/bio-exam-platform`）
+- **後端/資料庫**：Firebase（Firestore + Auth + Storage），無獨立後端伺服器
+- **部署**：GitHub Pages（`main` branch push 自動觸發 `.github/workflows/deploy.yml`）
+
+### Firebase Firestore 資料結構
+
+```
+units/{unitId}
+  name, exam_ratio（歷年考試各單元出題比率）
+
+questions/{questionId}
+  unit, sources[], question_en, question_zh,
+  options{A,B,C,D}, answer, explanations{A,B,C,D}, memory_tips
+
+student_records/{studentId}/answers/{questionId}
+  attempt_count, correct_count, wrong_count, last_answered
+```
+
+### 頁面路由對應
+
+| 路徑 | 頁面 | 說明 |
+|------|------|------|
+| `/` | HomePage | 選擇單元測驗或模擬考入口 |
+| `/login` | LoginPage | Google OAuth 登入 |
+| `/exam?mode=unit&units=unit1` | ExamPage | 作答介面 |
+| `/result` | ResultPage | 批改結果與逐題解析 |
+| `/record` | RecordPage | 學生個人學習紀錄 |
+| `/admin` | AdminPage | 老師後台（上傳題庫、查看報告） |
+
+### 測驗模式邏輯
+
+- **單元測驗**：URL param `mode=unit`，`units=unit1,unit2,...`（可複選）
+- **模擬考**：URL param `mode=mock`，從 `units` collection 讀取 `exam_ratio` 按比率抽題，或由學生自訂比率
+
+### 題庫匯入流程（AdminPage 待實作）
+
+1. 老師上傳 `.docx` → 存入 Firebase Storage
+2. 解析函式讀取 docx（`python-docx` 或 Cloud Function），依以下格式抽取每題：
+   - 題號、來源考試（如 `111中國後中`）、頁碼
+   - 英文題目 / 中文翻譯
+   - 選項 A~D（英中對照）
+   - 正確答案、各選項解說、記憶口訣
+3. 寫入 Firestore `questions` collection，`needs_review: true` 標記解析失敗的題目
+
+### vite.config.js 注意事項
+
+`base` 設定為 `/bio-exam-platform/`，對應 GitHub Pages repo 名稱。若 repo 名稱變更，需同步修改 `vite.config.js` 的 `base` 與 `src/main.jsx` 的 `BrowserRouter basename`。
+
+## 主題色（Tailwind 自訂）
+
+| 變數 | 色碼 | 用途 |
+|------|------|------|
+| `primary` | `#2E7D32` | 深綠，主要按鈕、Navbar |
+| `secondary` | `#1565C0` | 深藍，模擬考相關 |
+| `accent` | `#F57F17` | 橘黃，重點提示 |
