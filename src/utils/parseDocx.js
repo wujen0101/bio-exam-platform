@@ -17,7 +17,8 @@
  *   🧠 記憶口訣與重點  ...內容...
  */
 
-import mammoth from 'mammoth'
+// 使用 mammoth 瀏覽器版（支援 Vite ESM 打包）
+import mammoth from 'mammoth/mammoth.browser.js'
 
 // ── 工具函式 ────────────────────────────────────────────────────────────────
 
