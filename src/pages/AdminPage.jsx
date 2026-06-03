@@ -15,6 +15,7 @@ export default function AdminPage() {
   const [importResult, setImportResult] = useState(null)
   const [error, setError]         = useState('')
   const [previewIdx, setPreviewIdx] = useState(0)
+  const [showOnlyReview, setShowOnlyReview] = useState(false)
   const fileRef = useRef()
 
   // ── 步驟 1：選檔解析 ────────────────────────────────────────────────────────
@@ -68,6 +69,7 @@ export default function AdminPage() {
   }
 
   const needsReviewCount = questions.filter(q => q.needs_review).length
+  const displayQuestions = showOnlyReview ? questions.filter(q => q.needs_review) : questions
 
   // ── 渲染 ────────────────────────────────────────────────────────────────────
   return (
@@ -155,19 +157,33 @@ export default function AdminPage() {
           {/* 單題預覽 */}
           {questions.length > 0 && (
             <div className="bg-white rounded-2xl shadow p-5">
-              <div className="flex items-center justify-between mb-3">
-                <span className="font-semibold text-gray-700">題目預覽</span>
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-gray-700">題目預覽</span>
+                  {needsReviewCount > 0 && (
+                    <button
+                      onClick={() => { setShowOnlyReview(v => !v); setPreviewIdx(0) }}
+                      className={`text-xs px-2 py-1 rounded-full border transition ${
+                        showOnlyReview
+                          ? 'bg-yellow-100 border-yellow-400 text-yellow-800'
+                          : 'bg-gray-100 border-gray-300 text-gray-500 hover:bg-yellow-50'
+                      }`}
+                    >
+                      {showOnlyReview ? '▼ 只看需確認' : '篩選：只看需確認'}
+                    </button>
+                  )}
+                </div>
                 <div className="flex items-center gap-2 text-sm">
                   <button onClick={() => setPreviewIdx(i => Math.max(0, i - 1))}
                     disabled={previewIdx === 0}
                     className="px-2 py-1 rounded border disabled:opacity-40">◀</button>
-                  <span className="text-gray-500">{previewIdx + 1} / {questions.length}</span>
-                  <button onClick={() => setPreviewIdx(i => Math.min(questions.length - 1, i + 1))}
-                    disabled={previewIdx === questions.length - 1}
+                  <span className="text-gray-500">{previewIdx + 1} / {displayQuestions.length}</span>
+                  <button onClick={() => setPreviewIdx(i => Math.min(displayQuestions.length - 1, i + 1))}
+                    disabled={previewIdx === displayQuestions.length - 1}
                     className="px-2 py-1 rounded border disabled:opacity-40">▶</button>
                 </div>
               </div>
-              <QuestionPreview q={questions[previewIdx]} />
+              <QuestionPreview q={displayQuestions[previewIdx]} />
             </div>
           )}
 
@@ -259,6 +275,14 @@ function StatCard({ label, value, color }) {
 
 function QuestionPreview({ q }) {
   if (!q) return null
+
+  // 診斷缺失欄位
+  const missing = []
+  if (!q.question_en && !q.question_zh) missing.push('題目文字（英文+中文均缺）')
+  if (!q.answer) missing.push('正確答案')
+  const missingOpts = ['A','B','C','D'].filter(k => !q.options?.[k]?.en && !q.options?.[k]?.zh)
+  if (missingOpts.length > 0) missing.push(`選項 ${missingOpts.join('、')} 缺失`)
+
   const reviewBadge = q.needs_review
     ? <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">⚠️ 需確認</span>
     : <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✅ 解析正常</span>
@@ -274,6 +298,13 @@ function QuestionPreview({ q }) {
         )}
         {q.page_ref && <span className="text-xs text-gray-400">{q.page_ref}</span>}
       </div>
+
+      {/* 缺失欄位診斷 */}
+      {missing.length > 0 && (
+        <div className="bg-yellow-50 border border-yellow-300 rounded-lg px-3 py-2 text-xs text-yellow-800">
+          <span className="font-semibold">缺失欄位：</span>{missing.join('　|　')}
+        </div>
+      )}
 
       {/* 英文題目 */}
       {q.question_en && (
