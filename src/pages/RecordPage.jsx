@@ -628,13 +628,15 @@ export default function RecordPage() {
     setDeletingId(session.id)
     try {
       await deleteExamSession(user.uid, session.id)
-      setSessions(prev => prev.filter(s => s.id !== session.id))
-      // 重新載入彙總統計
-      const recs = await getStudentRecords(user.uid)
-      setRecords(recs)
     } catch (e) {
-      alert(`刪除失敗：${e.message}`)
+      console.error('deleteExamSession 部分失敗：', e.message)
     } finally {
+      // 無論成功或部分失敗，都從 UI 移除並重載統計
+      setSessions(prev => prev.filter(s => s.id !== session.id))
+      try {
+        const recs = await getStudentRecords(user.uid)
+        setRecords(recs)
+      } catch {}
       setDeletingId(null)
     }
   }, [user])
