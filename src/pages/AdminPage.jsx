@@ -194,9 +194,11 @@ function BrowseTab() {
   const [editingQ, setEditingQ]         = useState(null)
   const [filterReview, setFilterReview] = useState(false)
   const [search, setSearch]             = useState('')
+  const [selected, setSelected]         = useState(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   const loadUnit = useCallback(async (unitId) => {
-    setLoading(true); setExpandedId(null); setSearch(''); setFilterReview(false)
+    setLoading(true); setExpandedId(null); setSearch(''); setFilterReview(false); setSelected(new Set())
     try {
       const qs = await getQuestionsByUnit(unitId)
       setQuestions(qs)
@@ -226,6 +228,32 @@ function BrowseTab() {
     await deleteQuestion(q.id)
     setQuestions(prev => prev.filter(x => x.id !== q.id))
     setUnitCounts(prev => ({ ...prev, [selectedUnit]: (prev[selectedUnit] ?? 1) - 1 }))
+    setSelected(prev => { const s = new Set(prev); s.delete(q.id); return s })
+  }
+
+  async function handleBulkDelete() {
+    if (!window.confirm(`確定要刪除已選取的 ${selected.size} 題？此操作無法復原。`)) return
+    setBulkDeleting(true)
+    try {
+      await Promise.all([...selected].map(id => deleteQuestion(id)))
+      setQuestions(prev => prev.filter(x => !selected.has(x.id)))
+      setUnitCounts(prev => ({ ...prev, [selectedUnit]: (prev[selectedUnit] ?? selected.size) - selected.size }))
+      setSelected(new Set())
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
+  function toggleSelect(id) {
+    setSelected(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
+  }
+
+  function toggleSelectAll() {
+    if (selected.size === filtered.length && filtered.length > 0) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(filtered.map(q => q.id)))
+    }
   }
 
   function handleEditSaved(updated) {
@@ -296,6 +324,25 @@ function BrowseTab() {
           )}
         </div>
 
+        {/* 批次操作列 */}
+        {filtered.length > 0 && !loading && (
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <button onClick={toggleSelectAll}
+              className="text-xs px-2.5 py-1 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition whitespace-nowrap">
+              {selected.size === filtered.length && filtered.length > 0 ? '✕ 取消全選' : '全選'}
+            </button>
+            {selected.size > 0 && (
+              <>
+                <span className="text-xs text-gray-500">已選 {selected.size} 題</span>
+                <button onClick={handleBulkDelete} disabled={bulkDeleting}
+                  className="text-xs px-2.5 py-1 rounded-lg bg-red-500 text-white hover:bg-red-600 disabled:opacity-40 transition whitespace-nowrap ml-auto">
+                  {bulkDeleting ? '刪除中…' : `刪除已選取 (${selected.size})`}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
         {loading ? (
           <div className="text-center py-10 text-gray-400">載入中…</div>
         ) : filtered.length === 0 ? (
@@ -307,6 +354,8 @@ function BrowseTab() {
             {filtered.map(q => (
               <QuestionRow key={q.id} q={q}
                 expanded={expandedId === q.id}
+                checked={selected.has(q.id)}
+                onCheck={() => toggleSelect(q.id)}
                 onToggle={() => setExpandedId(expandedId === q.id ? null : q.id)}
                 onEdit={() => setEditingQ(q)}
                 onDelete={() => handleDelete(q)}
@@ -675,11 +724,17 @@ function EditModal({ q, onClose, onSaved }) {
 // 共用子元件
 // ══════════════════════════════════════════════════════════════════════════════
 
-function QuestionRow({ q, expanded, onToggle, onEdit, onDelete }) {
+function QuestionRow({ q, expanded, checked, onCheck, onToggle, onEdit, onDelete }) {
   const preview = (q.question_zh || q.question_en || '').slice(0, 60)
   return (
     <div className={`border rounded-xl overflow-hidden transition ${q.needs_review ? 'border-yellow-200' : 'border-gray-100'}`}>
       <div className={`flex items-center gap-2 px-3 py-2 text-sm ${q.needs_review ? 'bg-yellow-50' : 'bg-white'}`}>
+        {/* Checkbox */}
+        {onCheck && (
+          <input type="checkbox" checked={!!checked} onChange={onCheck}
+            className="shrink-0 w-3.5 h-3.5 accent-primary cursor-pointer"
+            onClick={e => e.stopPropagation()} />
+        )}
         {/* 展開按鈕區（主要點擊區） */}
         <button onClick={onToggle} className="flex items-center gap-2 flex-1 min-w-0 text-left hover:opacity-80">
           <span className="text-gray-400 text-xs w-10 shrink-0">#{q.question_no}</span>
