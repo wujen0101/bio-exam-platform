@@ -300,6 +300,8 @@ export default function ExamPage() {
   const [phase, setPhase] = useState('setup')  // setup | loading | exam
   const [questions, setQuestions] = useState([])
   const [error, setError] = useState('')
+  const [pendingAnswers, setPendingAnswers] = useState(null)  // 等待確認是否儲存
+  const [saving, setSaving] = useState(false)
 
   // 如果 URL 直接帶了 units 參數（從首頁單元卡片點進來），直接開始
   useEffect(() => {
@@ -333,19 +335,32 @@ export default function ExamPage() {
     }
   }
 
-  async function handleDone(answers) {
+  function handleDone(answers) {
     sessionStorage.setItem('exam_result', JSON.stringify({ questions, answers }))
-    // 登入中才寫紀錄，未登入直接跳轉（不擋匿名使用）
     if (user) {
+      // 登入中：顯示確認對話框
+      setPendingAnswers(answers)
+    } else {
+      // 未登入：直接查看結果
+      navigate('/result')
+    }
+  }
+
+  async function handleSaveAndGo(save) {
+    if (save && pendingAnswers) {
+      setSaving(true)
       try {
-        await saveExamRecord(user.uid, questions, answers, {
+        await saveExamRecord(user.uid, questions, pendingAnswers, {
           mode,
           units: [...new Set(questions.map(q => q.unit))],
         })
       } catch (err) {
         console.error('寫入作答紀錄失敗：', err)
+      } finally {
+        setSaving(false)
       }
     }
+    setPendingAnswers(null)
     navigate('/result')
   }
 
@@ -360,9 +375,73 @@ export default function ExamPage() {
   }
 
   if (phase === 'exam') {
-    // 模擬考：每題 2 分鐘計時
     const timeLimit = mode === 'mock' ? questions.length * 120 : null
-    return <ExamRunner questions={questions} onDone={handleDone} timeLimit={timeLimit} />
+    const correct = pendingAnswers
+      ? questions.filter((q, i) => pendingAnswers[i] === q.answer).length
+      : 0
+    const score = pendingAnswers
+      ? Math.round((correct / questions.length) * 100)
+      : 0
+
+    return (
+      <>
+        <ExamRunner questions={questions} onDone={handleDone} timeLimit={timeLimit} />
+
+        {/* 儲存確認 Modal */}
+        {pendingAnswers && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+              <div className="text-center">
+                <div className={`text-5xl font-black mb-1
+                  ${score >= 80 ? 'text-green-600' : score >= 60 ? 'text-yellow-500' : 'text-red-500'}`}>
+                  {score}
+                </div>
+                <div className="text-xs text-gray-400">分（滿分 100）</div>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="bg-green-50 rounded-xl py-2">
+                  <div className="font-bold text-green-700 text-lg">{correct}</div>
+                  <div className="text-green-600">答對</div>
+                </div>
+                <div className="bg-red-50 rounded-xl py-2">
+                  <div className="font-bold text-red-500 text-lg">
+                    {questions.filter((q, i) => pendingAnswers[i] && pendingAnswers[i] !== q.answer).length}
+                  </div>
+                  <div className="text-red-400">答錯</div>
+                </div>
+                <div className="bg-gray-50 rounded-xl py-2">
+                  <div className="font-bold text-gray-500 text-lg">
+                    {questions.filter((_, i) => !pendingAnswers[i]).length}
+                  </div>
+                  <div className="text-gray-400">未作答</div>
+                </div>
+              </div>
+
+              <p className="text-sm text-gray-600 text-center">
+                是否將此次作答儲存至學習紀錄？
+              </p>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleSaveAndGo(false)}
+                  disabled={saving}
+                  className="flex-1 py-2 rounded-xl border border-gray-300 text-gray-500 hover:bg-gray-50 text-sm transition disabled:opacity-40"
+                >
+                  不儲存
+                </button>
+                <button
+                  onClick={() => handleSaveAndGo(true)}
+                  disabled={saving}
+                  className="flex-1 py-2 rounded-xl bg-primary text-white font-medium hover:bg-green-800 text-sm transition disabled:opacity-40"
+                >
+                  {saving ? '儲存中…' : '儲存並查看'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    )
   }
 
   // setup 階段
