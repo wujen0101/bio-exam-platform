@@ -844,6 +844,15 @@ function QuestionDetail({ q }) {
           ? <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">⚠️ 需確認</span>
           : <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✅ 解析正常</span>
         }
+        {(() => {
+          const n = (q.sources ?? []).length
+          const stars = n >= 3 ? 5 : n === 2 ? 4 : n === 1 ? 3 : 0
+          return stars > 0
+            ? <span className="text-xs bg-amber-50 border border-amber-300 text-amber-600 px-2 py-0.5 rounded-full font-medium">
+                {'★'.repeat(stars)} （考古{n}次）
+              </span>
+            : <span className="text-xs text-gray-300 px-2 py-0.5 rounded-full border border-gray-200">☆ 未出現</span>
+        })()}
         {q.sources?.length > 0 && <span className="text-xs text-gray-400">來源：{q.sources.join('、')}</span>}
         {q.page_ref && <span className="text-xs text-gray-400">{q.page_ref}</span>}
       </div>
