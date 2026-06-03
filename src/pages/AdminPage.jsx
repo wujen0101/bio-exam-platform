@@ -280,7 +280,8 @@ function QuestionPreview({ q }) {
   const missing = []
   if (!q.question_en && !q.question_zh) missing.push('題目文字（英文+中文均缺）')
   if (!q.answer) missing.push('正確答案')
-  const missingOpts = ['A','B','C','D'].filter(k => !q.options?.[k]?.en && !q.options?.[k]?.zh)
+  const activeOptKeys = ['A','B','C','D','E'].filter(k => q.options?.[k]?.en || q.options?.[k]?.zh)
+  const missingOpts = activeOptKeys.length < 4 ? ['（不足 4 個選項）'] : []
   if (missingOpts.length > 0) missing.push(`選項 ${missingOpts.join('、')} 缺失`)
 
   const reviewBadge = q.needs_review
@@ -322,7 +323,7 @@ function QuestionPreview({ q }) {
 
       {/* 選項 */}
       <div className="grid grid-cols-1 gap-1.5">
-        {['A','B','C','D'].map(opt => (
+        {['A','B','C','D','E'].filter(opt => q.options?.[opt]?.en || q.options?.[opt]?.zh).map(opt => (
           <div key={opt}
             className={`flex gap-2 px-3 py-1.5 rounded-lg border text-xs
               ${q.answer === opt

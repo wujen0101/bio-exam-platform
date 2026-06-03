@@ -5,19 +5,19 @@
  * 支援格式（來自 Unit1_解析報告.docx）：
  *   題目 N （來源考試 A、來源考試 B） 【來源頁碼：PXX】
  *   📝 英文原題  ...題目內容...
- *   (A) ...  (B) ...  (C) ...  (D) ...
+ *   (A) ...  (B) ...  (C) ...  (D) ...  [(E) ...]
  *   📝 中文版題目  ...題目內容...
- *   (A) ...  (B) ...  (C) ...  (D) ...
+ *   (A) ...  (B) ...  (C) ...  (D) ...  [(E) ...]
  *   ✓ 正確答案：X
  *   🧠 詳細解說（逐項說明）
- *   ✓/✗ (A) ...解說...
- *   ✓/✗ (B) ...解說...
- *   ✓/✗ (C) ...解說...
- *   ✓/✗ (D) ...解說...
+ *   ✓/✗ (A) ...解說...  ...  [(E) ...]
  *   🧠 記憶口訣與重點  ...內容...
  */
 
 import mammoth from 'mammoth'
+
+const OPTS = ['A', 'B', 'C', 'D', 'E']
+const OPT_RE_SRC = '[ABCDEabcde]'
 
 // ── 工具函式 ────────────────────────────────────────────────────────────────
 
@@ -34,11 +34,10 @@ function parsePageRef(line) {
   return m ? `P${m[1]}` : null
 }
 
-/** 抽取選項，回傳 { A, B, C, D }（值為 null 若未找到） */
+/** 抽取選項，回傳 { A, B, C, D, E }（值為 null 若未找到） */
 function parseOptions(text) {
-  const opts = { A: null, B: null, C: null, D: null }
-  // 支援 (A)/(a) 開頭，統一轉大寫
-  const re = /\(([ABCDabcd])\)\s*([\s\S]*?)(?=\([ABCDabcd]\)|$)/g
+  const opts = { A: null, B: null, C: null, D: null, E: null }
+  const re = new RegExp(`\\((${OPT_RE_SRC})\\)\\s*([\\s\\S]*?)(?=\\(${OPT_RE_SRC}\\)|$)`, 'g')
   let m
   while ((m = re.exec(text)) !== null) {
     const key = m[1].toUpperCase()
@@ -47,22 +46,22 @@ function parseOptions(text) {
   return opts
 }
 
-/** 抽取正確答案字母 */
+/** 抽取正確答案字母（支援 A~E 大小寫） */
 function parseAnswer(lines, startIdx) {
   for (let i = startIdx; i < Math.min(startIdx + 10, lines.length); i++) {
-    const m = lines[i].match(/正確答案[：:]\s*([ABCDabcd])/)
+    const m = lines[i].match(new RegExp(`正確答案[：:]\\s*(${OPT_RE_SRC})`))
     if (m) return m[1].toUpperCase()
   }
   return null
 }
 
-/** 抽取各選項解說，回傳 { A, B, C, D } */
+/** 抽取各選項解說，回傳 { A, B, C, D, E } */
 function parseExplanations(lines, startIdx, endIdx) {
-  const expl = { A: null, B: null, C: null, D: null }
+  const expl = { A: null, B: null, C: null, D: null, E: null }
   let current = null
   for (let i = startIdx; i < endIdx; i++) {
     const line = lines[i].trim()
-    const m = line.match(/^[✓✗❌☑]\s*\(([ABCDabcd])\)\s*(.*)/)
+    const m = line.match(new RegExp(`^[✓✗❌☑]\\s*\\((${OPT_RE_SRC})\\)\\s*(.*)`))
     if (m) {
       current = m[1].toUpperCase()
       expl[current] = m[2].trim()
@@ -70,8 +69,7 @@ function parseExplanations(lines, startIdx, endIdx) {
       expl[current] = (expl[current] || '') + ' ' + line
     }
   }
-  // trim all
-  for (const k of ['A','B','C','D']) {
+  for (const k of OPTS) {
     if (expl[k]) expl[k] = expl[k].replace(/\s+/g, ' ').trim()
   }
   return expl
@@ -85,7 +83,7 @@ function parseMemoryTips(lines, startIdx) {
     const line = lines[i].trim()
     if (line.includes('記憶口訣') || line.includes('記憶重點')) { inSection = true; continue }
     if (inSection) {
-      if (line.startsWith('題目') && /題目\s*\d+/.test(line)) break  // 下一題開始
+      if (line.startsWith('題目') && /題目\s*\d+/.test(line)) break
       if (line) tips.push(line)
     }
   }
@@ -101,7 +99,6 @@ function parseMemoryTips(lines, startIdx) {
  * @returns {Promise<{ questions: Question[], warnings: string[] }>}
  */
 export async function parseDocxQuestions(arrayBuffer, unitId) {
-  // 1. 用 mammoth 轉成純文字
   const result = await mammoth.extractRawText({ arrayBuffer })
   const rawText = result.value
 
@@ -110,7 +107,6 @@ export async function parseDocxQuestions(arrayBuffer, unitId) {
 
   const questions = []
 
-  // 2. 找每題的起始行（以「題目 N」開頭）
   const questionStarts = []
   for (let i = 0; i < lines.length; i++) {
     if (/^題目\s*\d+/.test(lines[i])) {
@@ -123,7 +119,6 @@ export async function parseDocxQuestions(arrayBuffer, unitId) {
     return { questions, warnings }
   }
 
-  // 3. 逐題解析
   for (let qi = 0; qi < questionStarts.length; qi++) {
     const start = questionStarts[qi]
     const end = qi + 1 < questionStarts.length ? questionStarts[qi + 1] : lines.length
@@ -145,14 +140,12 @@ export async function parseDocxQuestions(arrayBuffer, unitId) {
 }
 
 function parseSingleQuestion(block, unitId, globalLineOffset) {
-  // block[0] = "題目 N （來源A、來源B） 【來源頁碼：P13】"
   const headerLine = block[0]
   const noMatch = headerLine.match(/題目\s*(\d+)/)
   const questionNo = noMatch ? parseInt(noMatch[1]) : null
   const sources = parseSources(headerLine)
   const page_ref = parsePageRef(headerLine)
 
-  // 找英文題目區塊
   let enStart = -1, zhStart = -1, detailStart = -1, memStart = -1
   for (let i = 1; i < block.length; i++) {
     const l = block[i]
@@ -163,48 +156,51 @@ function parseSingleQuestion(block, unitId, globalLineOffset) {
   }
 
   // 英文題目 + 選項
+  const optPat = new RegExp(`\\(${OPT_RE_SRC}\\)[^(]*`, 'g')
   const enSection = (enStart !== -1 && zhStart !== -1)
     ? block.slice(enStart, zhStart - 1).join(' ')
     : ''
-  const enQuestion = enSection.replace(/\([ABCD]\)[^(]*/g, '').trim()
+  const enQuestion = enSection.replace(optPat, '').trim()
   const enOptions = parseOptions(enSection)
 
   // 中文題目 + 選項
   const zhSection = (zhStart !== -1 && detailStart !== -1)
     ? block.slice(zhStart, detailStart - 1).join(' ')
     : ''
-  const zhQuestion = zhSection.replace(/\([ABCD]\)[^(]*/g, '').replace(/[-─]+/g, '').trim()
+  const zhQuestion = zhSection.replace(optPat, '').replace(/[-─]+/g, '').trim()
   const zhOptions = parseOptions(zhSection)
 
-  // 合併選項（英文為主，中文為輔）
+  // 合併選項，支援 A~E
   const options = {}
-  for (const k of ['A','B','C','D']) {
+  for (const k of OPTS) {
     options[k] = {
       en: enOptions[k] || null,
       zh: zhOptions[k] || null,
     }
   }
 
-  // 正確答案
-  const answerLineIdx = block.findIndex(l => /正確答案[：:]/.test(l))
+  // 正確答案（支援 A~E）
+  const answerRe = new RegExp(`正確答案[：:]\\s*(${OPT_RE_SRC})`)
+  const answerLineIdx = block.findIndex(l => answerRe.test(l))
   const answer = answerLineIdx !== -1
-    ? (block[answerLineIdx].match(/正確答案[：:]\s*([ABCDabcd])/)?.[1]?.toUpperCase() || null)
+    ? (block[answerLineIdx].match(answerRe)?.[1]?.toUpperCase() || null)
     : null
 
   // 各選項解說
   const explEnd = memStart !== -1 ? memStart : block.length
   const explanations = detailStart !== -1
     ? parseExplanations(block, detailStart, explEnd)
-    : { A: null, B: null, C: null, D: null }
+    : { A: null, B: null, C: null, D: null, E: null }
 
   // 記憶口訣
   const memory_tips = memStart !== -1
     ? block.slice(memStart + 1).join('\n').trim() || null
     : null
 
-  // 缺失欄位偵測（英中至少有其一即可）
+  // 判斷實際出現的選項（跳過全 null 的 E）
+  const activeOpts = OPTS.filter(k => options[k].en || options[k].zh)
   const hasQuestion = !!(enQuestion || zhQuestion)
-  const hasAllOptions = ['A','B','C','D'].every(k => options[k].en || options[k].zh)
+  const hasAllOptions = activeOpts.length >= 4  // 至少要有 4 個選項
   const needs_review = !hasQuestion || !answer || !hasAllOptions
 
   return {
@@ -214,9 +210,9 @@ function parseSingleQuestion(block, unitId, globalLineOffset) {
     page_ref,
     question_en: enQuestion || null,
     question_zh: zhQuestion || null,
-    options,          // { A: {en, zh}, B: {en, zh}, ... }
-    answer,           // "A" | "B" | "C" | "D"
-    explanations,     // { A: string, B: string, ... }
+    options,
+    answer,
+    explanations,
     memory_tips,
     needs_review,
     imported_at: new Date().toISOString(),
