@@ -155,11 +155,15 @@ export async function deleteExamSession(uid, sessionId) {
       const cur = currentDocs[qid]
       const ref = doc(db, 'student_records', uid, 'answers', qid)
 
-      if (cur && (cur.attempt_count ?? 0) <= attemptDelta) {
-        // 扣完後無剩餘作答次數 → 只保留 note/stars，清除統計欄位
+      if (!cur) {
+        // answers 子文件不存在，無需扣減
+      } else if ((cur.attempt_count ?? 0) <= attemptDelta) {
+        // 扣完後無剩餘作答次數 → 只保留 note/stars/bookmarked/fuzzy
         const keepFields = {}
-        if (cur.note  !== undefined) keepFields.note  = cur.note
-        if (cur.stars !== undefined) keepFields.stars = cur.stars
+        if (cur.note       !== undefined) keepFields.note       = cur.note
+        if (cur.stars      !== undefined) keepFields.stars      = cur.stars
+        if (cur.bookmarked !== undefined) keepFields.bookmarked = cur.bookmarked
+        if (cur.fuzzy      !== undefined) keepFields.fuzzy      = cur.fuzzy
         if (Object.keys(keepFields).length > 0) {
           batch.set(ref, keepFields)
         } else {
