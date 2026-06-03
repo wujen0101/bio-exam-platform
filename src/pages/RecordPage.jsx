@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getStudentRecords, getExamSessions, deleteExamSession, clearAllStats } from '../firebase/records'
-import { getQuestionsByIds } from '../firebase/questions'
+import { getQuestionsByIds, getAllQuestions } from '../firebase/questions'
 import { UNITS } from '../utils/units'
 
 // ── 練功專區 ──────────────────────────────────────────────────────────────────
@@ -27,39 +27,42 @@ function DrillSetup({ records, autoStarsMap = {}, onStart }) {
     setErrMsg('')
     setLoading(true)
 
-    // 先依條件篩出 question_id（OR 聯集）
-    const matched = new Set()
-    for (const r of records) {
-      if (conditions.includes('bookmarked') && r.bookmarked) matched.add(r.question_id)
-      if (conditions.includes('fuzzy')      && r.fuzzy)      matched.add(r.question_id)
-      if (conditions.includes('wrong_gt')   && (r.wrong_count ?? 0) >= wrongThreshold) matched.add(r.question_id)
-      if (conditions.includes('rate_lt') && (r.attempt_count ?? 0) > 0) {
-        const rate = Math.round((r.correct_count ?? 0) / r.attempt_count * 100)
-        if (rate <= rateThreshold) matched.add(r.question_id)
-      }
-      if (conditions.includes('stars_gte')) {
-        const effective = (r.stars ?? 0) > 0 ? (r.stars ?? 0) : (autoStarsMap[r.question_id] ?? 0)
-        if (effective >= starsThreshold) matched.add(r.question_id)
-      }
-    }
-
-    // 再依單元範圍過濾（selectedUnits 空 = 不限）
-    let ids = [...matched]
-    if (selectedUnits.length > 0) {
-      const unitSet = new Set(
-        records.filter(r => selectedUnits.includes(r.unit)).map(r => r.question_id)
-      )
-      ids = ids.filter(id => unitSet.has(id))
-    }
-
-    if (ids.length === 0) {
-      setErrMsg('沒有符合條件的題目，請調整篩選設定。')
-      setLoading(false)
-      return
-    }
-
     try {
+      const matched = new Set()
+      const recordConds = conditions.filter(c => c !== 'stars_gte')
+
+      // records 條件（收藏、模糊、錯題次數、答對率）
+      for (const r of records) {
+        const unitOk = selectedUnits.length === 0 || selectedUnits.includes(r.unit)
+        if (!unitOk) continue
+        if (recordConds.includes('bookmarked') && r.bookmarked) matched.add(r.question_id)
+        if (recordConds.includes('fuzzy')      && r.fuzzy)      matched.add(r.question_id)
+        if (recordConds.includes('wrong_gt')   && (r.wrong_count ?? 0) >= wrongThreshold) matched.add(r.question_id)
+        if (recordConds.includes('rate_lt') && (r.attempt_count ?? 0) > 0) {
+          const rate = Math.round((r.correct_count ?? 0) / r.attempt_count * 100)
+          if (rate <= rateThreshold) matched.add(r.question_id)
+        }
+      }
+
+      // 星號條件：查全部題目（不限於練習過的）
+      if (conditions.includes('stars_gte')) {
+        const allQs = await getAllQuestions()
+        for (const q of allQs) {
+          const unitOk = selectedUnits.length === 0 || selectedUnits.includes(q.unit)
+          if (!unitOk) continue
+          const stars = (q.auto_stars ?? 0)
+          if (stars >= starsThreshold) matched.add(q.id)
+        }
+      }
+
+      const ids = [...matched]
+      if (ids.length === 0) {
+        setErrMsg('沒有符合條件的題目，請調整篩選設定。')
+        return
+      }
+
       const qs = await getQuestionsByIds(ids)
+
       // 隨機打亂
       for (let i = qs.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -73,11 +76,13 @@ function DrillSetup({ records, autoStarsMap = {}, onStart }) {
     }
   }
 
-  // 預估符合題數
+  // 預估符合題數（stars_gte 用 autoStarsMap 估算；若 map 空則僅估其他條件）
   const previewCount = (() => {
     if (conditions.length === 0) return 0
     const matched = new Set()
     for (const r of records) {
+      const unitOk = selectedUnits.length === 0 || selectedUnits.includes(r.unit)
+      if (!unitOk) continue
       if (conditions.includes('bookmarked') && r.bookmarked) matched.add(r.question_id)
       if (conditions.includes('fuzzy')      && r.fuzzy)      matched.add(r.question_id)
       if (conditions.includes('wrong_gt')   && (r.wrong_count ?? 0) >= wrongThreshold) matched.add(r.question_id)
@@ -90,14 +95,7 @@ function DrillSetup({ records, autoStarsMap = {}, onStart }) {
         if (effective >= starsThreshold) matched.add(r.question_id)
       }
     }
-    let ids = [...matched]
-    if (selectedUnits.length > 0) {
-      const unitSet = new Set(
-        records.filter(r => selectedUnits.includes(r.unit)).map(r => r.question_id)
-      )
-      ids = ids.filter(id => unitSet.has(id))
-    }
-    return ids.length
+    return matched.size
   })()
 
   const CONDS = [
