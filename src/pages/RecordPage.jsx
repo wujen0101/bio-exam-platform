@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getStudentRecords, getExamSessions, deleteExamSession, clearAllStats } from '../firebase/records'
+import { getQuestionsByIds } from '../firebase/questions'
 import { UNITS } from '../utils/units'
 
 // ── 工具 ──────────────────────────────────────────────────────────────────────
@@ -42,6 +43,188 @@ function UnitCard({ unit, stats }) {
         <span className="text-xs text-gray-400 shrink-0">{stats.correct}/{stats.attempt} 題</span>
       </div>
     </div>
+  )
+}
+
+// ── 單題完整內容 Modal ────────────────────────────────────────────────────────
+function QuestionDetailModal({ q, stat, onClose }) {
+  const opts = ['A', 'B', 'C', 'D', 'E'].filter(k => q.options?.[k]?.en || q.options?.[k]?.zh)
+  function optText(k) {
+    const o = q.options?.[k]
+    if (!o) return '—'
+    return [o.en, o.zh].filter(Boolean).join('　')
+  }
+  const rate = pct(stat?.correct_count ?? 0, stat?.attempt_count ?? 0)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-3 py-6 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl">
+        {/* 頭部 */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400">{q.unit}</span>
+            {q.sources?.length > 0 && (
+              <span className="text-xs text-gray-400">・{q.sources.join('、')}</span>
+            )}
+            {q.auto_stars > 0 && (
+              <span className="text-amber-300 text-xs">{'★'.repeat(q.auto_stars)}</span>
+            )}
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+          {/* 作答統計 */}
+          {stat && (
+            <div className="flex gap-3 text-center text-xs">
+              <div className="flex-1 bg-gray-50 rounded-xl py-2">
+                <div className={`text-xl font-black ${rate >= 80 ? 'text-green-600' : rate >= 60 ? 'text-yellow-500' : 'text-red-500'}`}>{rate}%</div>
+                <div className="text-gray-400">答對率</div>
+              </div>
+              <div className="flex-1 bg-green-50 rounded-xl py-2">
+                <div className="text-xl font-black text-green-700">{stat.correct_count ?? 0}</div>
+                <div className="text-green-600">答對</div>
+              </div>
+              <div className="flex-1 bg-red-50 rounded-xl py-2">
+                <div className="text-xl font-black text-red-500">{stat.wrong_count ?? 0}</div>
+                <div className="text-red-400">答錯</div>
+              </div>
+              <div className="flex-1 bg-gray-50 rounded-xl py-2">
+                <div className="text-xl font-black text-gray-600">{stat.attempt_count ?? 0}</div>
+                <div className="text-gray-400">作答次數</div>
+              </div>
+            </div>
+          )}
+
+          {/* 題目 */}
+          {q.question_zh && <p className="text-sm text-gray-800 leading-relaxed font-medium">{q.question_zh}</p>}
+          {q.question_en && (
+            <div className="bg-blue-50 rounded-lg px-3 py-2 text-sm text-gray-700 leading-relaxed">
+              {q.question_en}
+            </div>
+          )}
+
+          {/* 選項 */}
+          <div className="space-y-1.5">
+            {opts.map(k => (
+              <div key={k}
+                className={`flex gap-2 px-3 py-2 rounded-lg text-sm border
+                  ${k === q.answer ? 'border-green-400 bg-green-50 text-green-800 font-semibold' : 'border-gray-100 text-gray-600'}`}>
+                <span className="font-bold shrink-0">{k}.</span>
+                <span>{optText(k)}</span>
+                {k === q.answer && <span className="ml-auto shrink-0 text-green-600">✓ 正確</span>}
+              </div>
+            ))}
+          </div>
+
+          {/* 解說 */}
+          {q.explanations && (
+            <div className="space-y-1">
+              <div className="text-xs font-semibold text-gray-500">選項解說</div>
+              {opts.map(k => q.explanations[k] && (
+                <div key={k} className="text-xs text-gray-600 flex gap-1.5">
+                  <span className="font-bold shrink-0">{k}.</span>
+                  <span>{q.explanations[k]}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 記憶口訣 */}
+          {q.memory_tips && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+              🧠 {q.memory_tips}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── 單元練習明細 Modal ────────────────────────────────────────────────────────
+function UnitDetailModal({ unit, records, onClose }) {
+  const [questions, setQuestions] = useState([])
+  const [loadingQ, setLoadingQ]   = useState(true)
+  const [selectedQ, setSelectedQ] = useState(null)
+
+  // 本單元的 records（已有統計）
+  const unitRecords = records.filter(r => r.unit === unit.id)
+  const statMap = Object.fromEntries(unitRecords.map(r => [r.question_id, r]))
+
+  useEffect(() => {
+    const ids = unitRecords.map(r => r.question_id)
+    getQuestionsByIds(ids)
+      .then(qs => setQuestions(qs.sort((a, b) => (a.question_no ?? 0) - (b.question_no ?? 0))))
+      .finally(() => setLoadingQ(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unit.id])
+
+  const unitAttempt = unitRecords.reduce((s, r) => s + (r.attempt_count || 0), 0)
+  const unitCorrect = unitRecords.reduce((s, r) => s + (r.correct_count || 0), 0)
+  const unitRate    = pct(unitCorrect, unitAttempt)
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/40 px-3 py-6 overflow-y-auto">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl">
+          {/* 頭部 */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <div>
+              <div className="font-bold text-gray-800">{unit.name} {unit.title_zh}</div>
+              <div className="text-xs text-gray-400 mt-0.5">
+                練習 {unitRecords.length} 題・{unitAttempt} 題次・答對率
+                <span className={`ml-1 font-semibold ${unitRate >= 80 ? 'text-green-600' : unitRate >= 60 ? 'text-yellow-500' : 'text-red-500'}`}>
+                  {unitRate}%
+                </span>
+              </div>
+            </div>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+          </div>
+
+          {/* 題目列表 */}
+          <div className="divide-y divide-gray-50 max-h-[65vh] overflow-y-auto">
+            {loadingQ ? (
+              <div className="text-center py-10 text-gray-400">載入中…</div>
+            ) : questions.length === 0 ? (
+              <div className="text-center py-10 text-gray-400">找不到題目資料</div>
+            ) : questions.map(q => {
+              const st = statMap[q.id] ?? {}
+              const r  = pct(st.correct_count ?? 0, st.attempt_count ?? 0)
+              const preview = (q.question_zh || q.question_en || '').slice(0, 55)
+              return (
+                <button key={q.id} onClick={() => setSelectedQ(q)}
+                  className="w-full text-left px-5 py-3 hover:bg-gray-50 transition flex items-center gap-3">
+                  <div className={`shrink-0 w-11 h-11 rounded-xl flex flex-col items-center justify-center font-black text-white text-xs ${scoreBg(r)}`}>
+                    <span className="text-base leading-none">{r}</span>
+                    <span className="opacity-80">%</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-gray-700 truncate">{preview || '（無題目文字）'}</div>
+                    <div className="flex gap-3 mt-0.5 text-xs text-gray-400">
+                      <span>答對 <span className="text-green-600 font-medium">{st.correct_count ?? 0}</span></span>
+                      <span>答錯 <span className="text-red-400 font-medium">{st.wrong_count ?? 0}</span></span>
+                      <span>作答 {st.attempt_count ?? 0} 次</span>
+                      {q.auto_stars > 0 && <span className="text-amber-300">{'★'.repeat(q.auto_stars)}</span>}
+                    </div>
+                  </div>
+                  <span className="text-gray-300 shrink-0">›</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* 題目詳細 Modal（疊在上層） */}
+      {selectedQ && (
+        <QuestionDetailModal
+          q={selectedQ}
+          stat={statMap[selectedQ.id]}
+          onClose={() => setSelectedQ(null)}
+        />
+      )}
+    </>
   )
 }
 
@@ -134,6 +317,7 @@ export default function RecordPage() {
   const [loading, setLoading]   = useState(true)
   const [deletingId, setDeletingId] = useState(null)
   const [clearing, setClearing] = useState(false)
+  const [unitDetail, setUnitDetail] = useState(null)   // 點選的單元
 
   useEffect(() => {
     if (authLoading || !user) return
@@ -260,6 +444,7 @@ export default function RecordPage() {
           )}
 
           <h2 className="text-base font-semibold text-gray-700 mb-3">各單元答對率</h2>
+          <p className="text-xs text-gray-400 mb-2">點選單元可查看練習過的題目明細</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-6">
             {UNITS.map(u => {
               const s = unitStats[u.id]
@@ -269,7 +454,12 @@ export default function RecordPage() {
                   <div className="text-xs text-gray-400 mt-0.5">尚未練習</div>
                 </div>
               )
-              return <UnitCard key={u.id} unit={u} stats={s} />
+              return (
+                <button key={u.id} onClick={() => setUnitDetail(u)}
+                  className="text-left w-full hover:ring-2 hover:ring-primary/30 rounded-xl transition">
+                  <UnitCard unit={u} stats={s} />
+                </button>
+              )
             })}
           </div>
 
@@ -309,6 +499,15 @@ export default function RecordPage() {
             </button>
           </div>
         </>
+      )}
+
+      {/* 單元明細 Modal */}
+      {unitDetail && (
+        <UnitDetailModal
+          unit={unitDetail}
+          records={records}
+          onClose={() => setUnitDetail(null)}
+        />
       )}
 
       {/* ── Tab: 作答紀錄 ── */}

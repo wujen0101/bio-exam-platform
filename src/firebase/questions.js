@@ -72,6 +72,17 @@ export async function getAllQuestions() {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }))
 }
 
+/**
+ * 批次讀取指定 ID 的題目（用於 RecordPage 題目明細）
+ * @param {string[]} ids
+ */
+export async function getQuestionsByIds(ids) {
+  if (!ids.length) return []
+  const { getDoc } = await import('firebase/firestore')
+  const snaps = await Promise.all(ids.map(id => getDoc(doc(db, COL, id))))
+  return snaps.filter(s => s.exists()).map(s => ({ id: s.id, ...s.data() }))
+}
+
 /** 刪除單題 */
 export async function deleteQuestion(docId) {
   await deleteDoc(doc(db, COL, docId))
