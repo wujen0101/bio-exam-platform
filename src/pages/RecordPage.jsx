@@ -56,18 +56,27 @@ function QuestionDetailModal({ q, stat, onClose }) {
   }
   const rate = pct(stat?.correct_count ?? 0, stat?.attempt_count ?? 0)
 
+  // 星號：手動星號優先，否則用 auto_stars
+  const manualStars = stat?.stars ?? 0
+  const displayStars = manualStars > 0 ? manualStars : (q.auto_stars ?? 0)
+  const isManualStar = manualStars > 0
+  const note = stat?.note ?? ''
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-3 py-6 overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl">
         {/* 頭部 */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-gray-400">{q.unit}</span>
             {q.sources?.length > 0 && (
               <span className="text-xs text-gray-400">・{q.sources.join('、')}</span>
             )}
-            {q.auto_stars > 0 && (
-              <span className="text-amber-300 text-xs">{'★'.repeat(q.auto_stars)}</span>
+            {displayStars > 0 && (
+              <span className={`text-sm ${isManualStar ? 'text-amber-400' : 'text-amber-200'}`}>
+                {'★'.repeat(displayStars)}
+                <span className="text-xs text-gray-400 ml-1">{isManualStar ? '（自訂）' : '（自動）'}</span>
+              </span>
             )}
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
@@ -93,6 +102,13 @@ function QuestionDetailModal({ q, stat, onClose }) {
                 <div className="text-xl font-black text-gray-600">{stat.attempt_count ?? 0}</div>
                 <div className="text-gray-400">作答次數</div>
               </div>
+            </div>
+          )}
+
+          {/* 備註 */}
+          {note && (
+            <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 text-sm text-blue-800">
+              📝 {note}
             </div>
           )}
 
@@ -192,6 +208,9 @@ function UnitDetailModal({ unit, records, onClose }) {
               const st = statMap[q.id] ?? {}
               const r  = pct(st.correct_count ?? 0, st.attempt_count ?? 0)
               const preview = (q.question_zh || q.question_en || '').slice(0, 55)
+              const manualStars = st.stars ?? 0
+              const dispStars   = manualStars > 0 ? manualStars : (q.auto_stars ?? 0)
+              const isManual    = manualStars > 0
               return (
                 <button key={q.id} onClick={() => setSelectedQ(q)}
                   className="w-full text-left px-5 py-3 hover:bg-gray-50 transition flex items-center gap-3">
@@ -200,12 +219,19 @@ function UnitDetailModal({ unit, records, onClose }) {
                     <span className="opacity-80">%</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm text-gray-700 truncate">{preview || '（無題目文字）'}</div>
-                    <div className="flex gap-3 mt-0.5 text-xs text-gray-400">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="text-sm text-gray-700 truncate">{preview || '（無題目文字）'}</span>
+                      {dispStars > 0 && (
+                        <span className={`shrink-0 text-xs ${isManual ? 'text-amber-400' : 'text-amber-200'}`}>
+                          {'★'.repeat(dispStars)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-3 text-xs text-gray-400">
                       <span>答對 <span className="text-green-600 font-medium">{st.correct_count ?? 0}</span></span>
                       <span>答錯 <span className="text-red-400 font-medium">{st.wrong_count ?? 0}</span></span>
                       <span>作答 {st.attempt_count ?? 0} 次</span>
-                      {q.auto_stars > 0 && <span className="text-amber-300">{'★'.repeat(q.auto_stars)}</span>}
+                      {st.note && <span className="text-blue-400">📝</span>}
                     </div>
                   </div>
                   <span className="text-gray-300 shrink-0">›</span>
