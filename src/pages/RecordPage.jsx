@@ -361,10 +361,18 @@ function QuestionDetailModal({ q, stat, onClose }) {
 }
 
 // ── 單元練習明細 Modal ────────────────────────────────────────────────────────
+const SORT_OPTIONS = [
+  { key: 'wrong_desc',  label: '答錯數↓' },
+  { key: 'stars_desc',  label: '星號↓' },
+  { key: 'bookmarked',  label: '★ 收藏' },
+  { key: 'fuzzy',       label: '? 模糊' },
+]
+
 function UnitDetailModal({ unit, records, onClose }) {
   const [questions, setQuestions] = useState([])
   const [loadingQ, setLoadingQ]   = useState(true)
   const [selectedQ, setSelectedQ] = useState(null)
+  const [sortKeys, setSortKeys]   = useState([])   // 多選排序，順序即優先順序
 
   // 本單元的 records（已有統計）
   const unitRecords = records.filter(r => r.unit === unit.id)
@@ -378,6 +386,33 @@ function UnitDetailModal({ unit, records, onClose }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unit.id])
 
+  function toggleSort(key) {
+    setSortKeys(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    )
+  }
+
+  // 依 sortKeys 順序做多鍵排序
+  const sortedQuestions = [...questions].sort((a, b) => {
+    for (const key of sortKeys) {
+      const sa = statMap[a.id] ?? {}, sb = statMap[b.id] ?? {}
+      let diff = 0
+      if (key === 'wrong_desc') {
+        diff = (sb.wrong_count ?? 0) - (sa.wrong_count ?? 0)
+      } else if (key === 'stars_desc') {
+        const starA = (sa.stars ?? 0) > 0 ? (sa.stars ?? 0) : (a.auto_stars ?? 0)
+        const starB = (sb.stars ?? 0) > 0 ? (sb.stars ?? 0) : (b.auto_stars ?? 0)
+        diff = starB - starA
+      } else if (key === 'bookmarked') {
+        diff = (sb.bookmarked ? 1 : 0) - (sa.bookmarked ? 1 : 0)
+      } else if (key === 'fuzzy') {
+        diff = (sb.fuzzy ? 1 : 0) - (sa.fuzzy ? 1 : 0)
+      }
+      if (diff !== 0) return diff
+    }
+    return 0
+  })
+
   const unitAttempt = unitRecords.reduce((s, r) => s + (r.attempt_count || 0), 0)
   const unitCorrect = unitRecords.reduce((s, r) => s + (r.correct_count || 0), 0)
   const unitRate    = pct(unitCorrect, unitAttempt)
@@ -387,29 +422,55 @@ function UnitDetailModal({ unit, records, onClose }) {
       <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/40 px-3 py-6 overflow-y-auto">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl">
           {/* 頭部 */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-            <div>
-              <div className="font-bold text-gray-800">{unit.name} {unit.title_zh}</div>
-              <div className="text-xs text-gray-400 mt-0.5">
-                練習 {unitRecords.length} 題・{unitAttempt} 題次・答對率
-                <span className={`ml-1 font-semibold ${unitRate >= 80 ? 'text-green-600' : unitRate >= 60 ? 'text-yellow-500' : 'text-red-500'}`}>
-                  {unitRate}%
-                </span>
+          <div className="px-5 py-4 border-b border-gray-100">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <div className="font-bold text-gray-800">{unit.name} {unit.title_zh}</div>
+                <div className="text-xs text-gray-400 mt-0.5">
+                  練習 {unitRecords.length} 題・{unitAttempt} 題次・答對率
+                  <span className={`ml-1 font-semibold ${unitRate >= 80 ? 'text-green-600' : unitRate >= 60 ? 'text-yellow-500' : 'text-red-500'}`}>
+                    {unitRate}%
+                  </span>
+                </div>
               </div>
+              <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
             </div>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+            {/* 排序選項 */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-gray-400 shrink-0">排序：</span>
+              {SORT_OPTIONS.map(({ key, label }, idx) => {
+                const active = sortKeys.includes(key)
+                const order  = sortKeys.indexOf(key) + 1
+                return (
+                  <button key={key} onClick={() => toggleSort(key)}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border transition
+                      ${active
+                        ? key === 'bookmarked' ? 'bg-yellow-400 border-yellow-400 text-white'
+                          : key === 'fuzzy'    ? 'bg-purple-500 border-purple-500 text-white'
+                          : 'bg-primary border-primary text-white'
+                        : 'bg-gray-50 border-gray-200 text-gray-500 hover:border-gray-300'}`}>
+                    {active && <span className="opacity-80">{order}.</span>}
+                    {label}
+                  </button>
+                )
+              })}
+              {sortKeys.length > 0 && (
+                <button onClick={() => setSortKeys([])}
+                  className="text-xs text-gray-400 underline hover:text-gray-600">重設</button>
+              )}
+            </div>
           </div>
 
           {/* 題目列表 */}
-          <div className="divide-y divide-gray-50 max-h-[65vh] overflow-y-auto">
+          <div className="divide-y divide-gray-50 max-h-[60vh] overflow-y-auto">
             {loadingQ ? (
               <div className="text-center py-10 text-gray-400">載入中…</div>
-            ) : questions.length === 0 ? (
+            ) : sortedQuestions.length === 0 ? (
               <div className="text-center py-10 text-gray-400">找不到題目資料</div>
-            ) : questions.map(q => {
+            ) : sortedQuestions.map(q => {
               const st = statMap[q.id] ?? {}
               const r  = pct(st.correct_count ?? 0, st.attempt_count ?? 0)
-              const preview = (q.question_zh || q.question_en || '').slice(0, 55)
+              const preview = (q.question_zh || q.question_en || '').slice(0, 50)
               const manualStars = st.stars ?? 0
               const dispStars   = manualStars > 0 ? manualStars : (q.auto_stars ?? 0)
               const isManual    = manualStars > 0
@@ -421,13 +482,15 @@ function UnitDetailModal({ unit, records, onClose }) {
                     <span className="opacity-80">%</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-0.5">
+                    <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                       <span className="text-sm text-gray-700 truncate">{preview || '（無題目文字）'}</span>
                       {dispStars > 0 && (
                         <span className={`shrink-0 text-xs ${isManual ? 'text-amber-400' : 'text-amber-200'}`}>
                           {'★'.repeat(dispStars)}
                         </span>
                       )}
+                      {st.bookmarked && <span className="shrink-0 bg-yellow-400 text-white text-xs font-bold px-1.5 py-0.5 rounded">★</span>}
+                      {st.fuzzy      && <span className="shrink-0 bg-purple-500 text-white text-xs font-bold px-1.5 py-0.5 rounded">?</span>}
                     </div>
                     <div className="flex gap-3 text-xs text-gray-400">
                       <span>答對 <span className="text-green-600 font-medium">{st.correct_count ?? 0}</span></span>
