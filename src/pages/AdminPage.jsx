@@ -332,17 +332,17 @@ function BrowseTab() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 function DupesTab() {
-  const [allQ, setAllQ]           = useState([])
-  const [loading, setLoading]     = useState(false)
-  const [groups, setGroups]       = useState([])
-  const [deletingId, setDeletingId] = useState(null)
+  const [allQ, setAllQ]         = useState([])
+  const [loading, setLoading]   = useState(false)
+  const [groups, setGroups]     = useState([])
+  const [selected, setSelected] = useState(new Set())  // 勾選的 docId
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   async function scan() {
-    setLoading(true)
+    setLoading(true); setSelected(new Set())
     try {
       const qs = await getAllQuestions()
       setAllQ(qs)
-      // 用正規化後的英文題目文字分組（去空白大小寫）
       const map = {}
       for (const q of qs) {
         const key = (q.question_en || q.question_zh || '').toLowerCase().replace(/\s+/g, ' ').trim()
@@ -350,8 +350,7 @@ function DupesTab() {
         if (!map[key]) map[key] = []
         map[key].push(q)
       }
-      const dupes = Object.values(map).filter(g => g.length > 1)
-      setGroups(dupes)
+      setGroups(Object.values(map).filter(g => g.length > 1))
     } finally {
       setLoading(false)
     }
@@ -359,21 +358,45 @@ function DupesTab() {
 
   useEffect(() => { scan() }, [])
 
-  async function handleDelete(q) {
+  function removeFromState(ids) {
+    const idSet = new Set(ids)
+    setAllQ(prev => prev.filter(x => !idSet.has(x.id)))
+    setGroups(prev => prev.map(g => g.filter(x => !idSet.has(x.id))).filter(g => g.length > 1))
+    setSelected(prev => { const s = new Set(prev); ids.forEach(id => s.delete(id)); return s })
+  }
+
+  async function handleDeleteOne(q) {
     if (!window.confirm(`確定要刪除「${q.unit} 題目 ${q.question_no}」？此操作無法復原。`)) return
-    setDeletingId(q.id)
+    await deleteQuestion(q.id)
+    removeFromState([q.id])
+  }
+
+  // 每組保留第一筆，自動勾選其餘
+  function autoSelectDupes() {
+    const toSelect = new Set()
+    for (const group of groups) {
+      group.slice(1).forEach(q => toSelect.add(q.id))
+    }
+    setSelected(toSelect)
+  }
+
+  function toggleSelect(id) {
+    setSelected(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
+  }
+
+  async function handleBulkDelete() {
+    if (selected.size === 0) return
+    if (!window.confirm(`確定要刪除選取的 ${selected.size} 題？此操作無法復原。`)) return
+    setBulkDeleting(true)
     try {
-      await deleteQuestion(q.id)
-      const newAllQ = allQ.filter(x => x.id !== q.id)
-      setAllQ(newAllQ)
-      setGroups(prev => prev
-        .map(g => g.filter(x => x.id !== q.id))
-        .filter(g => g.length > 1)
-      )
+      await Promise.all([...selected].map(id => deleteQuestion(id)))
+      removeFromState([...selected])
     } finally {
-      setDeletingId(null)
+      setBulkDeleting(false)
     }
   }
+
+  const totalDupes = groups.reduce((a, g) => a + g.length, 0)
 
   return (
     <div className="space-y-4">
@@ -396,20 +419,41 @@ function DupesTab() {
           </div>
         ) : (
           <div className="space-y-4">
-            <p className="text-sm text-yellow-700 bg-yellow-50 rounded-lg px-3 py-2">
-              ⚠️ 發現 <strong>{groups.length}</strong> 組重複題目，共 <strong>{groups.reduce((a, g) => a + g.length, 0)}</strong> 題
-            </p>
+            {/* 批次操作列 */}
+            <div className="flex items-center gap-2 flex-wrap bg-gray-50 rounded-xl px-4 py-3">
+              <span className="text-sm text-yellow-700 flex-1">
+                ⚠️ 發現 <strong>{groups.length}</strong> 組，共 <strong>{totalDupes}</strong> 題重複
+              </span>
+              <button onClick={autoSelectDupes}
+                className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-white transition">
+                自動勾選重複（每組保留第一筆）
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={selected.size === 0 || bulkDeleting}
+                className="text-xs px-3 py-1.5 rounded-lg bg-red-500 text-white hover:bg-red-600 disabled:opacity-40 transition">
+                {bulkDeleting ? `刪除中…` : `刪除已選取 ${selected.size > 0 ? `(${selected.size})` : ''}`}
+              </button>
+            </div>
+
             {groups.map((group, gi) => (
               <div key={gi} className="border border-yellow-200 rounded-xl overflow-hidden">
-                <div className="bg-yellow-50 px-3 py-2 text-xs font-semibold text-yellow-800">
-                  第 {gi + 1} 組（{group.length} 筆重複）
+                <div className="bg-yellow-50 px-3 py-2 text-xs font-semibold text-yellow-800 flex items-center justify-between">
+                  <span>第 {gi + 1} 組（{group.length} 筆重複）</span>
+                  <button onClick={() => group.slice(1).forEach(q => toggleSelect(q.id))}
+                    className="text-yellow-600 hover:text-yellow-800 underline font-normal">
+                    勾選此組重複
+                  </button>
                 </div>
                 <div className="divide-y divide-gray-100">
-                  {group.map(q => (
-                    <div key={q.id} className="flex items-start gap-3 px-3 py-3 text-sm">
+                  {group.map((q, qi) => (
+                    <div key={q.id} className={`flex items-start gap-3 px-3 py-3 text-sm transition ${selected.has(q.id) ? 'bg-red-50' : ''}`}>
+                      <input type="checkbox" checked={selected.has(q.id)} onChange={() => toggleSelect(q.id)}
+                        className="mt-1 shrink-0 cursor-pointer" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className="font-medium text-gray-700">{q.unit} — 題目 {q.question_no}</span>
+                          {qi === 0 && <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">保留</span>}
                           <span className={`text-xs px-1.5 py-0.5 rounded ${q.needs_review ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
                             {q.needs_review ? '⚠️ 需確認' : '✓ 正常'}
                           </span>
@@ -418,11 +462,9 @@ function DupesTab() {
                         </div>
                         <p className="text-xs text-gray-500 truncate">{(q.question_zh || q.question_en || '').slice(0, 80)}</p>
                       </div>
-                      <button
-                        onClick={() => handleDelete(q)}
-                        disabled={deletingId === q.id}
-                        className="shrink-0 text-xs px-2 py-1 rounded border border-red-200 text-red-500 hover:bg-red-50 disabled:opacity-40 transition">
-                        {deletingId === q.id ? '刪除中…' : '刪除'}
+                      <button onClick={() => handleDeleteOne(q)}
+                        className="shrink-0 text-xs px-2 py-1 rounded border border-red-200 text-red-500 hover:bg-red-50 transition">
+                        刪除
                       </button>
                     </div>
                   ))}
