@@ -37,11 +37,12 @@ function parsePageRef(line) {
 /** 抽取選項，回傳 { A, B, C, D }（值為 null 若未找到） */
 function parseOptions(text) {
   const opts = { A: null, B: null, C: null, D: null }
-  // 支援 (A) 或 A. 開頭
-  const re = /\(([ABCD])\)\s*([\s\S]*?)(?=\([ABCD]\)|$)/g
+  // 支援 (A)/(a) 開頭，統一轉大寫
+  const re = /\(([ABCDabcd])\)\s*([\s\S]*?)(?=\([ABCDabcd]\)|$)/g
   let m
   while ((m = re.exec(text)) !== null) {
-    opts[m[1]] = m[2].replace(/\s+/g, ' ').trim()
+    const key = m[1].toUpperCase()
+    opts[key] = m[2].replace(/\s+/g, ' ').trim()
   }
   return opts
 }
@@ -49,8 +50,8 @@ function parseOptions(text) {
 /** 抽取正確答案字母 */
 function parseAnswer(lines, startIdx) {
   for (let i = startIdx; i < Math.min(startIdx + 10, lines.length); i++) {
-    const m = lines[i].match(/正確答案[：:]\s*([ABCD])/)
-    if (m) return m[1]
+    const m = lines[i].match(/正確答案[：:]\s*([ABCDabcd])/)
+    if (m) return m[1].toUpperCase()
   }
   return null
 }
@@ -61,9 +62,9 @@ function parseExplanations(lines, startIdx, endIdx) {
   let current = null
   for (let i = startIdx; i < endIdx; i++) {
     const line = lines[i].trim()
-    const m = line.match(/^[✓✗❌☑]\s*\(([ABCD])\)\s*(.*)/)
+    const m = line.match(/^[✓✗❌☑]\s*\(([ABCDabcd])\)\s*(.*)/)
     if (m) {
-      current = m[1]
+      current = m[1].toUpperCase()
       expl[current] = m[2].trim()
     } else if (current && line && !line.startsWith('🧠') && !line.startsWith('✓ 正確')) {
       expl[current] = (expl[current] || '') + ' ' + line
@@ -187,7 +188,7 @@ function parseSingleQuestion(block, unitId, globalLineOffset) {
   // 正確答案
   const answerLineIdx = block.findIndex(l => /正確答案[：:]/.test(l))
   const answer = answerLineIdx !== -1
-    ? (block[answerLineIdx].match(/正確答案[：:]\s*([ABCD])/)?.[1] || null)
+    ? (block[answerLineIdx].match(/正確答案[：:]\s*([ABCDabcd])/)?.[1]?.toUpperCase() || null)
     : null
 
   // 各選項解說
