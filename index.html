@@ -5,6 +5,16 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>後中醫生物學線上測驗平台</title>
+    <script>
+      // GitHub Pages SPA redirect：從 404.html 接回正確路由
+      (function() {
+        var redirect = sessionStorage.getItem('redirect')
+        if (redirect) {
+          sessionStorage.removeItem('redirect')
+          window.history.replaceState(null, null, '/bio-exam-platform' + redirect)
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>
