@@ -11,8 +11,17 @@ function optionText(question, opt) {
   return [o.en, o.zh].filter(Boolean).join('  ')
 }
 
+/** 依考古題出現次數自動計算星號（0 = 無來源） */
+function autoStars(q) {
+  const n = (q.sources ?? []).length
+  if (n >= 3) return 5
+  if (n === 2) return 4
+  if (n === 1) return 3
+  return 0
+}
+
 // ── 星號選取元件 ──────────────────────────────────────────────────────────────
-function StarPicker({ value, onChange }) {
+function StarPicker({ value, onChange, dimmed = false }) {
   const [hover, setHover] = useState(0)
   return (
     <div className="flex items-center gap-0.5">
@@ -26,14 +35,15 @@ function StarPicker({ value, onChange }) {
           className="text-xl leading-none transition-transform hover:scale-110 focus:outline-none"
           title={`${n} 顆星`}
         >
-          <span className={(hover ? n <= hover : n <= value) ? 'text-amber-400' : 'text-gray-200'}>
+          <span className={
+            (hover ? n <= hover : n <= value)
+              ? (dimmed ? 'text-amber-200' : 'text-amber-400')
+              : 'text-gray-200'
+          }>
             ★
           </span>
         </button>
       ))}
-      {value > 0 && (
-        <span className="text-xs text-gray-400 ml-1">{value} 顆星</span>
-      )}
     </div>
   )
 }
@@ -42,7 +52,7 @@ function StarPicker({ value, onChange }) {
 function QuestionResult({ q, userAns, no, annotation, onSaveAnnotation }) {
   const [open, setOpen] = useState(false)
   const [note, setNote] = useState(annotation?.note ?? '')
-  const [stars, setStars] = useState(annotation?.stars ?? 0)
+  const [stars, setStars] = useState(annotation?.stars ?? 0)  // 0 = 尚未手動設定
   const [saving, setSaving] = useState(false)
   const debounceRef = useRef(null)
 
@@ -57,6 +67,11 @@ function QuestionResult({ q, userAns, no, annotation, onSaveAnnotation }) {
   const correct = q.answer
   const isRight = userAns === correct
   const opts = ['A', 'B', 'C', 'D']
+
+  // 自動星號（依 sources 數量）；手動星號優先
+  const qAutoStars = autoStars(q)
+  const isManual = stars > 0
+  const displayStars = isManual ? stars : qAutoStars  // 顯示用
 
   const saveNote = useCallback((newNote, newStars) => {
     if (!onSaveAnnotation) return
@@ -76,10 +91,15 @@ function QuestionResult({ q, userAns, no, annotation, onSaveAnnotation }) {
 
   function handleStarsChange(v) {
     setStars(v)
-    // 星號立即存（不 debounce）
     if (!onSaveAnnotation) return
     clearTimeout(debounceRef.current)
     onSaveAnnotation(q.id, { note, stars: v })
+  }
+
+  function handleResetStars() {
+    setStars(0)
+    if (!onSaveAnnotation) return
+    onSaveAnnotation(q.id, { note, stars: 0 })
   }
 
   return (
@@ -99,8 +119,10 @@ function QuestionResult({ q, userAns, no, annotation, onSaveAnnotation }) {
         <div className="flex-1 min-w-0">
           <div className="text-xs text-gray-400 mb-0.5 flex items-center gap-2">
             <span>第 {no} 題{q.sources?.length > 0 && `・${q.sources[0]}`}</span>
-            {stars > 0 && (
-              <span className="text-amber-400 text-xs">{'★'.repeat(stars)}</span>
+            {displayStars > 0 && (
+              <span className={isManual ? 'text-amber-400 text-xs' : 'text-amber-200 text-xs'}>
+                {'★'.repeat(displayStars)}
+              </span>
             )}
           </div>
           <p className="text-sm text-gray-800 leading-relaxed line-clamp-2">
@@ -167,9 +189,33 @@ function QuestionResult({ q, userAns, no, annotation, onSaveAnnotation }) {
           {onSaveAnnotation && (
             <div className="border-t border-gray-100 pt-3 space-y-2">
               {/* 重要性星號 */}
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-500 whitespace-nowrap">重要程度</span>
-                <StarPicker value={stars} onChange={handleStarsChange} />
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 whitespace-nowrap">重要程度</span>
+                  {/* 自動星號提示 */}
+                  {qAutoStars > 0 && (
+                    <span className="text-xs text-gray-400">
+                      考古題出現 {(q.sources ?? []).length} 次 →
+                      <span className="text-amber-300 ml-1">{'★'.repeat(qAutoStars)}</span>
+                      <span className="ml-1 text-gray-300">（自動）</span>
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <StarPicker
+                    value={isManual ? stars : qAutoStars}
+                    onChange={handleStarsChange}
+                    dimmed={!isManual}
+                  />
+                  {isManual ? (
+                    <span className="text-xs text-amber-500">自訂
+                      <button onClick={handleResetStars}
+                        className="ml-1.5 text-gray-400 hover:text-gray-600 underline">重設</button>
+                    </span>
+                  ) : qAutoStars > 0 ? (
+                    <span className="text-xs text-gray-400">自動（點星號可覆蓋）</span>
+                  ) : null}
+                </div>
               </div>
 
               {/* 備註欄 */}
