@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { drawQuestions } from '../firebase/questions'
-import { saveExamRecord } from '../firebase/records'
+import { saveExamRecord, saveQuestionAnnotation } from '../firebase/records'
 import { useAuth } from '../context/AuthContext'
 import { UNITS, SCHOOL_RATIOS } from '../utils/units'
 
@@ -117,9 +117,11 @@ function UnitSetup({ preSelected, onStart }) {
 }
 
 // ── 作答介面 ──────────────────────────────────────────────────────────────────
-function QuestionCard({ question, index, total, answer, answers, onAnswer, onNavigate, onPrev, onNext, onSubmit, timer }) {
+function QuestionCard({ question, index, total, answer, answers, flags, onAnswer, onToggleFlag, onNavigate, onPrev, onNext, onSubmit, timer }) {
   const opts = ['A', 'B', 'C', 'D']
   const isLast = index === total - 1
+  const isBookmarked = flags?.bookmarked ?? false
+  const isFuzzy = flags?.fuzzy ?? false
 
   const optionText = (opt) => {
     const o = question.options?.[opt]
@@ -152,7 +154,29 @@ function QuestionCard({ question, index, total, answer, answers, onAnswer, onNav
 
       {/* 題目內容 */}
       <div className="bg-white rounded-2xl shadow p-5 mb-4">
-        <div className="font-bold text-gray-800 mb-1 text-sm">第 {index + 1} 題</div>
+        <div className="flex items-center justify-between mb-1">
+          <div className="font-bold text-gray-800 text-sm">第 {index + 1} 題</div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => onToggleFlag('bookmarked')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition
+                ${isBookmarked
+                  ? 'bg-yellow-50 border-yellow-400 text-yellow-600'
+                  : 'bg-gray-50 border-gray-200 text-gray-400 hover:border-yellow-300 hover:text-yellow-500'}`}
+            >
+              ★ 收藏
+            </button>
+            <button
+              onClick={() => onToggleFlag('fuzzy')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition
+                ${isFuzzy
+                  ? 'bg-purple-50 border-purple-400 text-purple-600'
+                  : 'bg-gray-50 border-gray-200 text-gray-400 hover:border-purple-300 hover:text-purple-500'}`}
+            >
+              ? 模糊
+            </button>
+          </div>
+        </div>
         {question.question_en && (
           <p className="text-gray-800 leading-relaxed mb-2">{question.question_en}</p>
         )}
@@ -214,7 +238,10 @@ function QuestionCard({ question, index, total, answer, answers, onAnswer, onNav
           <button
             key={i}
             onClick={() => onNavigate(i)}
-            className={`w-7 h-7 rounded text-xs font-medium transition
+            title={[
+              answers[i] !== undefined ? '已作答' : '未作答',
+            ].join(' ')}
+            className={`w-7 h-7 rounded text-xs font-medium transition relative
               ${i === index ? 'bg-primary text-white' :
                 answers[i] !== undefined ? 'bg-green-100 text-green-700' :
                 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
@@ -244,13 +271,14 @@ function Timer({ secondsLeft }) {
 function ExamRunner({ questions, onDone, timeLimit }) {
   const [index, setIndex] = useState(0)
   const [answers, setAnswers] = useState({})
+  const [flags, setFlags] = useState({})  // { [questionIndex]: { bookmarked, fuzzy } }
   const [secondsLeft, setSecondsLeft] = useState(timeLimit ?? null)
 
   // 倒數計時
   useEffect(() => {
     if (secondsLeft === null) return
     if (secondsLeft <= 0) {
-      onDone(answers)
+      onDone(answers, flags)
       return
     }
     const id = setTimeout(() => setSecondsLeft(s => s - 1), 1000)
@@ -263,13 +291,23 @@ function ExamRunner({ questions, onDone, timeLimit }) {
     setAnswers(prev => ({ ...prev, [index]: opt }))
   }
 
+  function handleToggleFlag(flagName) {
+    setFlags(prev => ({
+      ...prev,
+      [index]: {
+        ...prev[index],
+        [flagName]: !(prev[index]?.[flagName] ?? false),
+      },
+    }))
+  }
+
   function handleSubmit() {
     const unanswered = questions.length - Object.keys(answers).length
     if (unanswered > 0) {
       const confirmed = window.confirm(`還有 ${unanswered} 題未作答，確定要交卷嗎？`)
       if (!confirmed) return
     }
-    onDone(answers)
+    onDone(answers, flags)
   }
 
   return (
@@ -279,7 +317,9 @@ function ExamRunner({ questions, onDone, timeLimit }) {
       total={questions.length}
       answer={answers[index]}
       answers={answers}
+      flags={flags[index]}
       onAnswer={handleAnswer}
+      onToggleFlag={handleToggleFlag}
       onNavigate={goTo}
       onPrev={() => goTo(index - 1)}
       onNext={() => goTo(index + 1)}
@@ -301,6 +341,7 @@ export default function ExamPage() {
   const [questions, setQuestions] = useState([])
   const [error, setError] = useState('')
   const [pendingAnswers, setPendingAnswers] = useState(null)  // 等待確認是否儲存
+  const [pendingFlags, setPendingFlags] = useState({})
   const [saving, setSaving] = useState(false)
 
   // 如果 URL 直接帶了 units 參數（從首頁單元卡片點進來），直接開始
@@ -335,11 +376,12 @@ export default function ExamPage() {
     }
   }
 
-  function handleDone(answers) {
+  function handleDone(answers, flags) {
     sessionStorage.setItem('exam_result', JSON.stringify({ questions, answers }))
     if (user) {
       // 登入中：顯示確認對話框
       setPendingAnswers(answers)
+      setPendingFlags(flags)
     } else {
       // 未登入：直接查看結果
       navigate('/result')
@@ -354,6 +396,17 @@ export default function ExamPage() {
           mode,
           units: [...new Set(questions.map(q => q.unit))],
         })
+        // 儲存收藏/模糊標記
+        const flagWrites = Object.entries(pendingFlags).map(([idx, f]) => {
+          const q = questions[Number(idx)]
+          if (!q) return null
+          const update = {}
+          if (f.bookmarked != null) update.bookmarked = f.bookmarked
+          if (f.fuzzy != null) update.fuzzy = f.fuzzy
+          if (Object.keys(update).length === 0) return null
+          return saveQuestionAnnotation(user.uid, q.id, update)
+        }).filter(Boolean)
+        await Promise.all(flagWrites)
       } catch (err) {
         console.error('寫入作答紀錄失敗：', err)
       } finally {
@@ -361,6 +414,7 @@ export default function ExamPage() {
       }
     }
     setPendingAnswers(null)
+    setPendingFlags({})
     navigate('/result')
   }
 
