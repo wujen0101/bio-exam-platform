@@ -17,8 +17,7 @@
  *   🧠 記憶口訣與重點  ...內容...
  */
 
-// 使用 mammoth 瀏覽器版（支援 Vite ESM 打包）
-import mammoth from 'mammoth/mammoth.browser.js'
+import mammoth from 'mammoth'
 
 // ── 工具函式 ────────────────────────────────────────────────────────────────
 
@@ -202,11 +201,10 @@ function parseSingleQuestion(block, unitId, globalLineOffset) {
     ? block.slice(memStart + 1).join('\n').trim() || null
     : null
 
-  // 缺失欄位偵測
-  const needs_review =
-    !enQuestion || !zhQuestion || !answer ||
-    Object.values(options).some(o => !o.en && !o.zh) ||
-    Object.values(explanations).every(v => !v)
+  // 缺失欄位偵測（英中至少有其一即可）
+  const hasQuestion = !!(enQuestion || zhQuestion)
+  const hasAllOptions = ['A','B','C','D'].every(k => options[k].en || options[k].zh)
+  const needs_review = !hasQuestion || !answer || !hasAllOptions
 
   return {
     unit: unitId,
