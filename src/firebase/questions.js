@@ -3,7 +3,7 @@
  */
 
 import {
-  collection, doc, setDoc, getDocs,
+  collection, doc, setDoc, deleteDoc, updateDoc, getDocs,
   query, where, writeBatch, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from './config'
@@ -60,6 +60,26 @@ export async function getQuestionsByUnit(unitId) {
   const snap = await getDocs(q)
   const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
   return docs.sort((a, b) => (a.question_no ?? 0) - (b.question_no ?? 0))
+}
+
+/** 讀取全部題目（用於重複偵測） */
+export async function getAllQuestions() {
+  const snap = await getDocs(collection(db, COL))
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+}
+
+/** 刪除單題 */
+export async function deleteQuestion(docId) {
+  await deleteDoc(doc(db, COL, docId))
+}
+
+/**
+ * 更新單題（部分欄位）
+ * @param {string} docId
+ * @param {object} fields - 要更新的欄位
+ */
+export async function updateQuestion(docId, fields) {
+  await updateDoc(doc(db, COL, docId), { ...fields, server_ts: serverTimestamp() })
 }
 
 /**
