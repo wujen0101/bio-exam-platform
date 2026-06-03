@@ -1,7 +1,7 @@
-import { useMemo, useState, useEffect, useContext, useRef, useCallback } from 'react'
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { UNIT_MAP } from '../utils/units'
-import { AuthContext } from '../context/AuthContext'
+import { useAuth } from '../context/AuthContext'
 import { getQuestionAnnotations, saveQuestionAnnotation } from '../firebase/records'
 
 function optionText(question, opt) {
@@ -247,7 +247,7 @@ function QuestionResult({ q, userAns, no, annotation, onSaveAnnotation }) {
 // ── 主頁面 ────────────────────────────────────────────────────────────────────
 export default function ResultPage() {
   const navigate = useNavigate()
-  const { user } = useContext(AuthContext)
+  const { user } = useAuth()
   const [filter, setFilter] = useState('all') // all | wrong | unanswered
   const [annotations, setAnnotations] = useState({}) // { [questionId]: { note, stars } }
 
