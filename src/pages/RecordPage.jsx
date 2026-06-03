@@ -7,9 +7,10 @@ import { UNITS } from '../utils/units'
 
 // ── 練功專區 ──────────────────────────────────────────────────────────────────
 function DrillSetup({ records, onStart }) {
-  const [conditions, setConditions] = useState([])        // 多選：bookmarked | fuzzy | wrong_gt | rate_lt
+  const [conditions, setConditions] = useState([])        // 多選：bookmarked | fuzzy | wrong_gt | rate_lt | stars_gte
   const [wrongThreshold, setWrongThreshold] = useState(2)
   const [rateThreshold, setRateThreshold]   = useState(60)
+  const [starsThreshold, setStarsThreshold] = useState(3)
   const [selectedUnits, setSelectedUnits]   = useState([])  // [] = 全部
   const [loading, setLoading] = useState(false)
   const [errMsg, setErrMsg] = useState('')
@@ -36,6 +37,7 @@ function DrillSetup({ records, onStart }) {
         const rate = Math.round((r.correct_count ?? 0) / r.attempt_count * 100)
         if (rate < rateThreshold) matched.add(r.question_id)
       }
+      if (conditions.includes('stars_gte') && (r.stars ?? 0) >= starsThreshold) matched.add(r.question_id)
     }
 
     // 再依單元範圍過濾（selectedUnits 空 = 不限）
@@ -80,6 +82,7 @@ function DrillSetup({ records, onStart }) {
         const rate = Math.round((r.correct_count ?? 0) / r.attempt_count * 100)
         if (rate < rateThreshold) matched.add(r.question_id)
       }
+      if (conditions.includes('stars_gte') && (r.stars ?? 0) >= starsThreshold) matched.add(r.question_id)
     }
     let ids = [...matched]
     if (selectedUnits.length > 0) {
@@ -96,6 +99,7 @@ function DrillSetup({ records, onStart }) {
     { key: 'fuzzy',      label: '? 模糊標記', color: 'purple' },
     { key: 'wrong_gt',   label: '錯題次數',   color: 'red' },
     { key: 'rate_lt',    label: '答對率',      color: 'blue' },
+    { key: 'stars_gte',  label: '★ 星號等級', color: 'amber' },
   ]
 
   const btnActive = {
@@ -103,6 +107,7 @@ function DrillSetup({ records, onStart }) {
     purple: 'bg-purple-500 border-purple-500 text-white',
     red:    'bg-red-500 border-red-500 text-white',
     blue:   'bg-blue-500 border-blue-500 text-white',
+    amber:  'bg-amber-500 border-amber-500 text-white',
   }
   const btnIdle = 'bg-gray-50 border-gray-200 text-gray-500 hover:border-gray-300'
 
@@ -142,6 +147,21 @@ function DrillSetup({ records, onStart }) {
               className="w-20 border border-gray-200 rounded-lg px-3 py-1 text-sm text-center focus:ring-2 focus:ring-blue-300 outline-none"
             />
             <span className="text-sm text-gray-400">%</span>
+          </div>
+        )}
+        {conditions.includes('stars_gte') && (
+          <div className="flex items-center gap-3 mb-3 pl-1">
+            <span className="text-sm text-gray-600 whitespace-nowrap">星號等級 &ge;</span>
+            <div className="flex gap-1">
+              {[1, 2, 3, 4, 5].map(n => (
+                <button key={n} type="button" onClick={() => setStarsThreshold(n)}
+                  className={`w-8 h-8 rounded-lg text-sm font-bold border transition
+                    ${starsThreshold === n ? 'bg-amber-500 border-amber-500 text-white' : 'border-gray-200 text-gray-400 hover:border-amber-300'}`}>
+                  {n}
+                </button>
+              ))}
+            </div>
+            <span className="text-sm text-amber-500">{'★'.repeat(starsThreshold)}</span>
           </div>
         )}
       </div>
