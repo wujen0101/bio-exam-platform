@@ -56,6 +56,8 @@ function QuestionResult({ q, userAns, no, annotation, onSaveAnnotation }) {
   const [open, setOpen] = useState(false)
   const [note, setNote] = useState(annotation?.note ?? '')
   const [stars, setStars] = useState(annotation?.stars ?? 0)  // 0 = 尚未手動設定
+  const [bookmarked, setBookmarked] = useState(annotation?.bookmarked ?? false)
+  const [fuzzy, setFuzzy] = useState(annotation?.fuzzy ?? false)
   const [saving, setSaving] = useState(false)
   const debounceRef = useRef(null)
 
@@ -64,6 +66,8 @@ function QuestionResult({ q, userAns, no, annotation, onSaveAnnotation }) {
     if (annotation) {
       setNote(annotation.note ?? '')
       setStars(annotation.stars ?? 0)
+      setBookmarked(annotation.bookmarked ?? false)
+      setFuzzy(annotation.fuzzy ?? false)
     }
   }, [annotation])
 
@@ -105,6 +109,18 @@ function QuestionResult({ q, userAns, no, annotation, onSaveAnnotation }) {
     onSaveAnnotation(q.id, { note, stars: 0 })
   }
 
+  function handleToggleBookmarked() {
+    const next = !bookmarked
+    setBookmarked(next)
+    if (onSaveAnnotation) onSaveAnnotation(q.id, { bookmarked: next })
+  }
+
+  function handleToggleFuzzy() {
+    const next = !fuzzy
+    setFuzzy(next)
+    if (onSaveAnnotation) onSaveAnnotation(q.id, { fuzzy: next })
+  }
+
   return (
     <div className={`bg-white rounded-2xl shadow mb-3 overflow-hidden border-l-4
       ${isRight ? 'border-green-400' : userAns ? 'border-red-400' : 'border-gray-300'}`}>
@@ -120,12 +136,18 @@ function QuestionResult({ q, userAns, no, annotation, onSaveAnnotation }) {
           {isRight ? '✓' : userAns ? '✗' : '—'}
         </span>
         <div className="flex-1 min-w-0">
-          <div className="text-xs text-gray-400 mb-0.5 flex items-center gap-2">
+          <div className="text-xs text-gray-400 mb-0.5 flex items-center gap-2 flex-wrap">
             <span>第 {no} 題{q.sources?.length > 0 && `・${q.sources[0]}`}</span>
             {displayStars > 0 && (
               <span className={isManual ? 'text-amber-400 text-xs' : 'text-amber-200 text-xs'}>
                 {'★'.repeat(displayStars)}
               </span>
+            )}
+            {bookmarked && (
+              <span className="bg-yellow-400 text-white text-xs font-bold px-1.5 py-0.5 rounded">★ 收藏</span>
+            )}
+            {fuzzy && (
+              <span className="bg-purple-500 text-white text-xs font-bold px-1.5 py-0.5 rounded">? 模糊</span>
             )}
           </div>
           <p className="text-sm text-gray-800 leading-relaxed line-clamp-2">
@@ -191,6 +213,28 @@ function QuestionResult({ q, userAns, no, annotation, onSaveAnnotation }) {
           {/* ── 學生標註區 ── */}
           {onSaveAnnotation && (
             <div className="border-t border-gray-100 pt-3 space-y-2">
+              {/* 收藏 / 模糊標記 */}
+              <div className="flex gap-2">
+                <button
+                  onClick={handleToggleBookmarked}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold border transition
+                    ${bookmarked
+                      ? 'bg-yellow-400 border-yellow-400 text-white shadow-sm'
+                      : 'bg-gray-50 border-gray-200 text-gray-400 hover:border-yellow-300 hover:text-yellow-500'}`}
+                >
+                  ★ 收藏
+                </button>
+                <button
+                  onClick={handleToggleFuzzy}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold border transition
+                    ${fuzzy
+                      ? 'bg-purple-500 border-purple-500 text-white shadow-sm'
+                      : 'bg-gray-50 border-gray-200 text-gray-400 hover:border-purple-300 hover:text-purple-500'}`}
+                >
+                  ? 模糊
+                </button>
+              </div>
+
               {/* 重要性星號 */}
               <div className="space-y-1">
                 <div className="flex items-center gap-2">

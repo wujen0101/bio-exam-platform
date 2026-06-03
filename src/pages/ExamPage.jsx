@@ -159,18 +159,18 @@ function QuestionCard({ question, index, total, answer, answers, flags, onAnswer
           <div className="flex gap-2">
             <button
               onClick={() => onToggleFlag('bookmarked')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border transition
                 ${isBookmarked
-                  ? 'bg-yellow-50 border-yellow-400 text-yellow-600'
+                  ? 'bg-yellow-400 border-yellow-400 text-white shadow-sm'
                   : 'bg-gray-50 border-gray-200 text-gray-400 hover:border-yellow-300 hover:text-yellow-500'}`}
             >
               ★ 收藏
             </button>
             <button
               onClick={() => onToggleFlag('fuzzy')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border transition
                 ${isFuzzy
-                  ? 'bg-purple-50 border-purple-400 text-purple-600'
+                  ? 'bg-purple-500 border-purple-500 text-white shadow-sm'
                   : 'bg-gray-50 border-gray-200 text-gray-400 hover:border-purple-300 hover:text-purple-500'}`}
             >
               ? 模糊

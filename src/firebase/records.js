@@ -199,9 +199,14 @@ export async function getQuestionAnnotations(uid, questionIds) {
     const snap = await getDoc(doc(db, 'student_records', uid, 'answers', id))
     if (snap.exists()) {
       const d = snap.data()
-      results[id] = { note: d.note ?? '', stars: d.stars ?? 0 }
+      results[id] = {
+        note: d.note ?? '',
+        stars: d.stars ?? 0,
+        bookmarked: d.bookmarked ?? false,
+        fuzzy: d.fuzzy ?? false,
+      }
     } else {
-      results[id] = { note: '', stars: 0 }
+      results[id] = { note: '', stars: 0, bookmarked: false, fuzzy: false }
     }
   }))
   return results
