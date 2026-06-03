@@ -371,6 +371,22 @@ function DupesTab() {
     removeFromState([q.id])
   }
 
+  // 勾選指定單元在重複組中的所有題目（若該單元是某組唯一最佳則不勾）
+  function selectByUnit(unitId) {
+    const toSelect = new Set(selected)
+    for (const group of groups) {
+      const sorted = [...group].sort((a, b) => {
+        const diff = qualityScore(b) - qualityScore(a)
+        return diff !== 0 ? diff : (a.unit || '').localeCompare(b.unit || '')
+      })
+      const bestId = sorted[0].id
+      group.forEach(q => {
+        if (q.unit === unitId && q.id !== bestId) toSelect.add(q.id)
+      })
+    }
+    setSelected(toSelect)
+  }
+
   // 計算題目品質分數（越高越好）
   function qualityScore(q) {
     let score = 0
@@ -437,21 +453,47 @@ function DupesTab() {
         ) : (
           <div className="space-y-4">
             {/* 批次操作列 */}
-            <div className="flex items-center gap-2 flex-wrap bg-gray-50 rounded-xl px-4 py-3">
-              <span className="text-sm text-yellow-700 flex-1">
-                ⚠️ 發現 <strong>{groups.length}</strong> 組，共 <strong>{totalDupes}</strong> 題重複
-              </span>
-              <button onClick={autoSelectDupes}
-                className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-white transition whitespace-nowrap">
-                自動勾選重複
-              </button>
-              <button
-                onClick={handleBulkDelete}
-                disabled={selected.size === 0 || bulkDeleting}
-                className="text-xs px-3 py-1.5 rounded-lg bg-red-500 text-white hover:bg-red-600 disabled:opacity-40 transition">
-                {bulkDeleting ? `刪除中…` : `刪除已選取 ${selected.size > 0 ? `(${selected.size})` : ''}`}
-              </button>
-            </div>
+            {(() => {
+              // 計算所有重複題目涉及的單元（排序）
+              const dupUnits = [...new Set(groups.flat().map(q => q.unit))].sort()
+              return (
+                <div className="bg-gray-50 rounded-xl px-4 py-3 space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm text-yellow-700 flex-1">
+                      ⚠️ 發現 <strong>{groups.length}</strong> 組，共 <strong>{totalDupes}</strong> 題重複
+                    </span>
+                    {selected.size > 0 && (
+                      <span className="text-xs text-gray-500">已勾選 {selected.size} 題</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-gray-500 whitespace-nowrap">勾選：</span>
+                    <button onClick={autoSelectDupes}
+                      className="text-xs px-2.5 py-1 rounded-lg border border-gray-300 text-gray-600 hover:bg-white transition whitespace-nowrap">
+                      自動（品質最佳保留）
+                    </button>
+                    {dupUnits.map(uid => (
+                      <button key={uid} onClick={() => selectByUnit(uid)}
+                        className="text-xs px-2.5 py-1 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 transition whitespace-nowrap">
+                        勾選 {uid} 的重複
+                      </button>
+                    ))}
+                    {selected.size > 0 && (
+                      <button onClick={() => setSelected(new Set())}
+                        className="text-xs px-2.5 py-1 rounded-lg border border-gray-300 text-gray-500 hover:bg-white transition whitespace-nowrap">
+                        ✕ 取消全部
+                      </button>
+                    )}
+                    <button
+                      onClick={handleBulkDelete}
+                      disabled={selected.size === 0 || bulkDeleting}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-red-500 text-white hover:bg-red-600 disabled:opacity-40 transition whitespace-nowrap ml-auto">
+                      {bulkDeleting ? '刪除中…' : `刪除已選取 ${selected.size > 0 ? `(${selected.size})` : ''}`}
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
 
             {groups.map((group, gi) => {
               // 找本組品質最佳的那筆
