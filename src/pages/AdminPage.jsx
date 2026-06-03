@@ -332,10 +332,10 @@ function BrowseTab() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 function DupesTab() {
-  const [allQ, setAllQ]         = useState([])
-  const [loading, setLoading]   = useState(false)
-  const [groups, setGroups]     = useState([])
-  const [selected, setSelected] = useState(new Set())  // 勾選的 docId
+  const [allQ, setAllQ]           = useState([])
+  const [loading, setLoading]     = useState(false)
+  const [groups, setGroups]       = useState([])
+  const [selected, setSelected]   = useState(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
   async function scan() {
@@ -371,11 +371,28 @@ function DupesTab() {
     removeFromState([q.id])
   }
 
-  // 每組保留第一筆，自動勾選其餘
+  // 計算題目品質分數（越高越好）
+  function qualityScore(q) {
+    let score = 0
+    if (!q.needs_review) score += 4
+    if (q.answer)        score += 2
+    const opts = ['A','B','C','D'].filter(k => q.options?.[k]?.en || q.options?.[k]?.zh)
+    score += opts.length  // 最多加 4
+    return score
+  }
+
+  // 自動判斷：每組保留品質最佳的一筆，品質相同保留 unit 編號最小者
   function autoSelectDupes() {
     const toSelect = new Set()
     for (const group of groups) {
-      group.slice(1).forEach(q => toSelect.add(q.id))
+      const sorted = [...group].sort((a, b) => {
+        const diff = qualityScore(b) - qualityScore(a)
+        if (diff !== 0) return diff
+        // 品質相同：依 unit 編號排序（unit1 < unit2 …）
+        return (a.unit || '').localeCompare(b.unit || '')
+      })
+      const keep = sorted[0]
+      sorted.slice(1).forEach(q => toSelect.add(q.id))
     }
     setSelected(toSelect)
   }
@@ -425,8 +442,8 @@ function DupesTab() {
                 ⚠️ 發現 <strong>{groups.length}</strong> 組，共 <strong>{totalDupes}</strong> 題重複
               </span>
               <button onClick={autoSelectDupes}
-                className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-white transition">
-                自動勾選重複（每組保留第一筆）
+                className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-white transition whitespace-nowrap">
+                自動勾選重複
               </button>
               <button
                 onClick={handleBulkDelete}
@@ -436,24 +453,31 @@ function DupesTab() {
               </button>
             </div>
 
-            {groups.map((group, gi) => (
+            {groups.map((group, gi) => {
+              // 找本組品質最佳的那筆
+              const bestId = [...group].sort((a, b) => {
+                const diff = qualityScore(b) - qualityScore(a)
+                return diff !== 0 ? diff : (a.unit || '').localeCompare(b.unit || '')
+              })[0].id
+
+              return (
               <div key={gi} className="border border-yellow-200 rounded-xl overflow-hidden">
                 <div className="bg-yellow-50 px-3 py-2 text-xs font-semibold text-yellow-800 flex items-center justify-between">
                   <span>第 {gi + 1} 組（{group.length} 筆重複）</span>
-                  <button onClick={() => group.slice(1).forEach(q => toggleSelect(q.id))}
+                  <button onClick={() => group.filter(q => q.id !== bestId).forEach(q => toggleSelect(q.id))}
                     className="text-yellow-600 hover:text-yellow-800 underline font-normal">
                     勾選此組重複
                   </button>
                 </div>
                 <div className="divide-y divide-gray-100">
-                  {group.map((q, qi) => (
+                  {group.map((q) => (
                     <div key={q.id} className={`flex items-start gap-3 px-3 py-3 text-sm transition ${selected.has(q.id) ? 'bg-red-50' : ''}`}>
                       <input type="checkbox" checked={selected.has(q.id)} onChange={() => toggleSelect(q.id)}
                         className="mt-1 shrink-0 cursor-pointer" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className="font-medium text-gray-700">{q.unit} — 題目 {q.question_no}</span>
-                          {qi === 0 && <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">保留</span>}
+                          {q.id === bestId && <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">★ 保留</span>}
                           <span className={`text-xs px-1.5 py-0.5 rounded ${q.needs_review ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
                             {q.needs_review ? '⚠️ 需確認' : '✓ 正常'}
                           </span>
@@ -470,7 +494,8 @@ function DupesTab() {
                   ))}
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
