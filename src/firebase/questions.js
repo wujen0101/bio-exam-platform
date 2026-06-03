@@ -4,7 +4,7 @@
 
 import {
   collection, doc, setDoc, getDocs,
-  query, where, orderBy, writeBatch, serverTimestamp,
+  query, where, writeBatch, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from './config'
 
@@ -56,10 +56,10 @@ export async function getQuestionsByUnit(unitId) {
   const q = query(
     collection(db, COL),
     where('unit', '==', unitId),
-    orderBy('question_no'),
   )
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  return docs.sort((a, b) => (a.question_no ?? 0) - (b.question_no ?? 0))
 }
 
 /**
