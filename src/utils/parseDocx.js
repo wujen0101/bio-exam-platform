@@ -46,10 +46,10 @@ function parseOptions(text) {
   return opts
 }
 
-/** 抽取正確答案字母（支援 A~E 大小寫） */
+/** 抽取正確答案字母（支援 A~E 大小寫，含括號格式） */
 function parseAnswer(lines, startIdx) {
   for (let i = startIdx; i < Math.min(startIdx + 10, lines.length); i++) {
-    const m = lines[i].match(new RegExp(`正確答案[：:]\\s*(${OPT_RE_SRC})`))
+    const m = lines[i].match(new RegExp(`正確答案[：:]\\s*\\(?\\s*(${OPT_RE_SRC})\\)?`))
     if (m) return m[1].toUpperCase()
   }
   return null
@@ -180,7 +180,8 @@ function parseSingleQuestion(block, unitId, globalLineOffset) {
   }
 
   // 正確答案（支援 A~E）
-  const answerRe = new RegExp(`正確答案[：:]\\s*(${OPT_RE_SRC})`)
+  // 支援 "正確答案：E"、"正確答案：(E)"、"正確答案：(e)" 等格式
+  const answerRe = new RegExp(`正確答案[：:]\\s*\\(?\\s*(${OPT_RE_SRC})\\)?`)
   const answerLineIdx = block.findIndex(l => answerRe.test(l))
   const answer = answerLineIdx !== -1
     ? (block[answerLineIdx].match(answerRe)?.[1]?.toUpperCase() || null)
@@ -215,6 +216,7 @@ function parseSingleQuestion(block, unitId, globalLineOffset) {
     explanations,
     memory_tips,
     needs_review,
+    _answerRaw: answerLineIdx !== -1 ? block[answerLineIdx] : null,
     imported_at: new Date().toISOString(),
   }
 }

@@ -302,8 +302,11 @@ function QuestionPreview({ q }) {
 
       {/* 缺失欄位診斷 */}
       {missing.length > 0 && (
-        <div className="bg-yellow-50 border border-yellow-300 rounded-lg px-3 py-2 text-xs text-yellow-800">
-          <span className="font-semibold">缺失欄位：</span>{missing.join('　|　')}
+        <div className="bg-yellow-50 border border-yellow-300 rounded-lg px-3 py-2 text-xs text-yellow-800 space-y-1">
+          <div><span className="font-semibold">缺失欄位：</span>{missing.join('　|　')}</div>
+          {!q.answer && q._answerRaw && (
+            <div className="text-gray-500">答案行原文：<code className="bg-white px-1 rounded">{q._answerRaw}</code></div>
+          )}
         </div>
       )}
 
