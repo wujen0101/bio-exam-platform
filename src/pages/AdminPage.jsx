@@ -371,17 +371,12 @@ function DupesTab() {
     removeFromState([q.id])
   }
 
-  // 勾選指定單元在重複組中的所有題目（若該單元是某組唯一最佳則不勾）
+  // 勾選指定單元在重複組中的所有題目
   function selectByUnit(unitId) {
     const toSelect = new Set(selected)
     for (const group of groups) {
-      const sorted = [...group].sort((a, b) => {
-        const diff = qualityScore(b) - qualityScore(a)
-        return diff !== 0 ? diff : (a.unit || '').localeCompare(b.unit || '')
-      })
-      const bestId = sorted[0].id
       group.forEach(q => {
-        if (q.unit === unitId && q.id !== bestId) toSelect.add(q.id)
+        if (q.unit === unitId) toSelect.add(q.id)
       })
     }
     setSelected(toSelect)
