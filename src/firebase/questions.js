@@ -31,8 +31,12 @@ export async function importQuestions(questions, uploadedBy) {
         // docId = unit_題號，例如 unit1_001
         const docId = `${q.unit}_${String(q.question_no).padStart(3, '0')}`
         const ref = doc(db, COL, docId)
+        // 依考古題出現次數計算自動星號
+        const srcCount = (q.sources ?? []).length
+        const auto_stars = srcCount >= 3 ? 5 : srcCount === 2 ? 4 : srcCount === 1 ? 3 : 0
         batch.set(ref, {
           ...q,
+          auto_stars,
           uploaded_by: uploadedBy,
           server_ts: serverTimestamp(),
         }, { merge: true })  // merge: 已存在則更新，不覆蓋作答紀錄
@@ -79,6 +83,11 @@ export async function deleteQuestion(docId) {
  * @param {object} fields - 要更新的欄位
  */
 export async function updateQuestion(docId, fields) {
+  // 若更新了 sources，同步重算 auto_stars
+  if (fields.sources != null) {
+    const n = fields.sources.length
+    fields = { ...fields, auto_stars: n >= 3 ? 5 : n === 2 ? 4 : n === 1 ? 3 : 0 }
+  }
   await updateDoc(doc(db, COL, docId), { ...fields, server_ts: serverTimestamp() })
 }
 

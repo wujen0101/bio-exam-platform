@@ -11,8 +11,11 @@ function optionText(question, opt) {
   return [o.en, o.zh].filter(Boolean).join('  ')
 }
 
-/** 依考古題出現次數自動計算星號（0 = 無來源） */
+/** 依考古題出現次數自動計算星號（0 = 無來源）
+ *  優先讀取匯入時寫入的 auto_stars 欄位，否則即時從 sources 長度計算
+ */
 function autoStars(q) {
+  if (q.auto_stars != null) return q.auto_stars
   const n = (q.sources ?? []).length
   if (n >= 3) return 5
   if (n === 2) return 4
