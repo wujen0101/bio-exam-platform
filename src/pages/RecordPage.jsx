@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { getStudentRecords, getExamSessions, deleteExamSession } from '../firebase/records'
+import { getStudentRecords, getExamSessions, deleteExamSession, clearAllStats } from '../firebase/records'
 import { UNITS } from '../utils/units'
 
 // ── 工具 ──────────────────────────────────────────────────────────────────────
@@ -133,6 +133,7 @@ export default function RecordPage() {
   const [sessions, setSessions] = useState([])
   const [loading, setLoading]   = useState(true)
   const [deletingId, setDeletingId] = useState(null)
+  const [clearing, setClearing] = useState(false)
 
   useEffect(() => {
     if (authLoading || !user) return
@@ -280,6 +281,31 @@ export default function RecordPage() {
             <button onClick={() => navigate('/')}
               className="bg-primary text-white px-5 py-2 rounded-lg hover:bg-green-800 transition text-sm font-medium">
               選擇測驗
+            </button>
+          </div>
+
+          {/* 危險操作：重設統計 */}
+          <div className="border border-red-100 rounded-2xl px-5 py-4 flex items-center justify-between bg-red-50/40">
+            <div>
+              <div className="font-semibold text-red-700 text-sm">重設作答統計</div>
+              <div className="text-xs text-red-400 mt-0.5">清除所有答對／答錯累計，備註與星號不受影響</div>
+            </div>
+            <button
+              disabled={clearing}
+              onClick={async () => {
+                if (!window.confirm('確定要清除所有作答統計？此操作無法復原。')) return
+                setClearing(true)
+                try {
+                  await clearAllStats(user.uid)
+                  setRecords([])
+                } catch (e) {
+                  alert(`清除失敗：${e.message}`)
+                } finally {
+                  setClearing(false)
+                }
+              }}
+              className="text-sm px-4 py-2 rounded-lg border border-red-300 text-red-500 hover:bg-red-100 disabled:opacity-40 transition whitespace-nowrap">
+              {clearing ? '清除中…' : '清除統計'}
             </button>
           </div>
         </>

@@ -73,6 +73,37 @@ export async function getStudentRecords(uid) {
 }
 
 /**
+ * 清除所有彙總統計（attempt/correct/wrong），保留 note/stars
+ * 無統計欄位的 doc 直接刪除
+ */
+export async function clearAllStats(uid) {
+  const snap = await getDocs(collection(db, 'student_records', uid, 'answers'))
+  const BATCH_SIZE = 400
+  const docs = snap.docs
+
+  for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+    const chunk = docs.slice(i, i + BATCH_SIZE)
+    const batch = writeBatch(db)
+
+    for (const d of chunk) {
+      const data = d.data()
+      const keep = {}
+      if (data.note  != null) keep.note  = data.note
+      if (data.stars != null) keep.stars = data.stars
+
+      if (Object.keys(keep).length > 0) {
+        // 保留 note/stars，刪除統計欄位
+        batch.set(d.ref, keep)
+      } else {
+        batch.delete(d.ref)
+      }
+    }
+
+    await batch.commit()
+  }
+}
+
+/**
  * 讀取所有測驗 session（依時間倒序）
  */
 export async function getExamSessions(uid) {
