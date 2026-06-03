@@ -338,7 +338,10 @@ export default function ExamPage() {
     // 登入中才寫紀錄，未登入直接跳轉（不擋匿名使用）
     if (user) {
       try {
-        await saveExamRecord(user.uid, questions, answers)
+        await saveExamRecord(user.uid, questions, answers, {
+          mode,
+          units: [...new Set(questions.map(q => q.unit))],
+        })
       } catch (err) {
         console.error('寫入作答紀錄失敗：', err)
       }
