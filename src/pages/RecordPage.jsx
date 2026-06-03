@@ -32,10 +32,10 @@ function DrillSetup({ records, onStart }) {
     for (const r of records) {
       if (conditions.includes('bookmarked') && r.bookmarked) matched.add(r.question_id)
       if (conditions.includes('fuzzy')      && r.fuzzy)      matched.add(r.question_id)
-      if (conditions.includes('wrong_gt')   && (r.wrong_count ?? 0) > wrongThreshold) matched.add(r.question_id)
+      if (conditions.includes('wrong_gt')   && (r.wrong_count ?? 0) >= wrongThreshold) matched.add(r.question_id)
       if (conditions.includes('rate_lt') && (r.attempt_count ?? 0) > 0) {
         const rate = Math.round((r.correct_count ?? 0) / r.attempt_count * 100)
-        if (rate < rateThreshold) matched.add(r.question_id)
+        if (rate <= rateThreshold) matched.add(r.question_id)
       }
       if (conditions.includes('stars_gte') && (r.stars ?? 0) >= starsThreshold) matched.add(r.question_id)
     }
@@ -77,10 +77,10 @@ function DrillSetup({ records, onStart }) {
     for (const r of records) {
       if (conditions.includes('bookmarked') && r.bookmarked) matched.add(r.question_id)
       if (conditions.includes('fuzzy')      && r.fuzzy)      matched.add(r.question_id)
-      if (conditions.includes('wrong_gt')   && (r.wrong_count ?? 0) > wrongThreshold) matched.add(r.question_id)
+      if (conditions.includes('wrong_gt')   && (r.wrong_count ?? 0) >= wrongThreshold) matched.add(r.question_id)
       if (conditions.includes('rate_lt') && (r.attempt_count ?? 0) > 0) {
         const rate = Math.round((r.correct_count ?? 0) / r.attempt_count * 100)
-        if (rate < rateThreshold) matched.add(r.question_id)
+        if (rate <= rateThreshold) matched.add(r.question_id)
       }
       if (conditions.includes('stars_gte') && (r.stars ?? 0) >= starsThreshold) matched.add(r.question_id)
     }
@@ -131,7 +131,7 @@ function DrillSetup({ records, onStart }) {
         {/* 條件參數 */}
         {conditions.includes('wrong_gt') && (
           <div className="flex items-center gap-3 mb-3 pl-1">
-            <span className="text-sm text-gray-600 whitespace-nowrap">錯題次數 &gt;</span>
+            <span className="text-sm text-gray-600 whitespace-nowrap">錯題次數 &ge;</span>
             <input type="number" min={0} max={99} value={wrongThreshold}
               onChange={e => setWrongThreshold(Number(e.target.value))}
               className="w-20 border border-gray-200 rounded-lg px-3 py-1 text-sm text-center focus:ring-2 focus:ring-red-300 outline-none"
@@ -141,7 +141,7 @@ function DrillSetup({ records, onStart }) {
         )}
         {conditions.includes('rate_lt') && (
           <div className="flex items-center gap-3 mb-3 pl-1">
-            <span className="text-sm text-gray-600 whitespace-nowrap">答對率 &lt;</span>
+            <span className="text-sm text-gray-600 whitespace-nowrap">答對率 &le;</span>
             <input type="number" min={0} max={100} value={rateThreshold}
               onChange={e => setRateThreshold(Number(e.target.value))}
               className="w-20 border border-gray-200 rounded-lg px-3 py-1 text-sm text-center focus:ring-2 focus:ring-blue-300 outline-none"
