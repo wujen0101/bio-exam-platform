@@ -771,6 +771,15 @@ function QuestionRow({ q, expanded, checked, onCheck, onToggle, onEdit, onDelete
               {q.sources[0]}{q.sources.length > 1 ? ` +${q.sources.length - 1}` : ''}
             </span>
           )}
+          {(() => {
+            const stars = q.auto_stars ?? (() => {
+              const n = (q.sources ?? []).length
+              return n >= 3 ? 5 : n === 2 ? 4 : n === 1 ? 3 : 0
+            })()
+            return stars > 0
+              ? <span className="text-xs text-amber-400 shrink-0 font-bold">{'★'.repeat(stars)}</span>
+              : null
+          })()}
           <span className="text-gray-300 text-xs shrink-0">{expanded ? '▲' : '▼'}</span>
         </button>
         {/* 操作按鈕 */}
