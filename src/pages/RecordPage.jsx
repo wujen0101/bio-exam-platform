@@ -5,6 +5,188 @@ import { getStudentRecords, getExamSessions, deleteExamSession, clearAllStats } 
 import { getQuestionsByIds } from '../firebase/questions'
 import { UNITS } from '../utils/units'
 
+// ── 練功專區 ──────────────────────────────────────────────────────────────────
+function DrillSetup({ records, onStart }) {
+  const [conditions, setConditions] = useState([])        // 多選：bookmarked | fuzzy | wrong_gt | rate_lt
+  const [wrongThreshold, setWrongThreshold] = useState(2)
+  const [rateThreshold, setRateThreshold]   = useState(60)
+  const [selectedUnits, setSelectedUnits]   = useState([])  // [] = 全部
+  const [loading, setLoading] = useState(false)
+  const [errMsg, setErrMsg] = useState('')
+
+  function toggleCond(key) {
+    setConditions(prev => prev.includes(key) ? prev.filter(c => c !== key) : [...prev, key])
+  }
+  function toggleUnit(id) {
+    setSelectedUnits(prev => prev.includes(id) ? prev.filter(u => u !== id) : [...prev, id])
+  }
+
+  async function handleStart() {
+    if (conditions.length === 0) { setErrMsg('請至少選擇一個篩選條件。'); return }
+    setErrMsg('')
+    setLoading(true)
+
+    // 先依條件篩出 question_id（OR 聯集）
+    const matched = new Set()
+    for (const r of records) {
+      if (conditions.includes('bookmarked') && r.bookmarked) matched.add(r.question_id)
+      if (conditions.includes('fuzzy')      && r.fuzzy)      matched.add(r.question_id)
+      if (conditions.includes('wrong_gt')   && (r.wrong_count ?? 0) > wrongThreshold) matched.add(r.question_id)
+      if (conditions.includes('rate_lt') && (r.attempt_count ?? 0) > 0) {
+        const rate = Math.round((r.correct_count ?? 0) / r.attempt_count * 100)
+        if (rate < rateThreshold) matched.add(r.question_id)
+      }
+    }
+
+    // 再依單元範圍過濾（selectedUnits 空 = 不限）
+    let ids = [...matched]
+    if (selectedUnits.length > 0) {
+      const unitSet = new Set(
+        records.filter(r => selectedUnits.includes(r.unit)).map(r => r.question_id)
+      )
+      ids = ids.filter(id => unitSet.has(id))
+    }
+
+    if (ids.length === 0) {
+      setErrMsg('沒有符合條件的題目，請調整篩選設定。')
+      setLoading(false)
+      return
+    }
+
+    try {
+      const qs = await getQuestionsByIds(ids)
+      // 隨機打亂
+      for (let i = qs.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [qs[i], qs[j]] = [qs[j], qs[i]]
+      }
+      onStart(qs)
+    } catch (e) {
+      setErrMsg(`載入失敗：${e.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 預估符合題數
+  const previewCount = (() => {
+    if (conditions.length === 0) return 0
+    const matched = new Set()
+    for (const r of records) {
+      if (conditions.includes('bookmarked') && r.bookmarked) matched.add(r.question_id)
+      if (conditions.includes('fuzzy')      && r.fuzzy)      matched.add(r.question_id)
+      if (conditions.includes('wrong_gt')   && (r.wrong_count ?? 0) > wrongThreshold) matched.add(r.question_id)
+      if (conditions.includes('rate_lt') && (r.attempt_count ?? 0) > 0) {
+        const rate = Math.round((r.correct_count ?? 0) / r.attempt_count * 100)
+        if (rate < rateThreshold) matched.add(r.question_id)
+      }
+    }
+    let ids = [...matched]
+    if (selectedUnits.length > 0) {
+      const unitSet = new Set(
+        records.filter(r => selectedUnits.includes(r.unit)).map(r => r.question_id)
+      )
+      ids = ids.filter(id => unitSet.has(id))
+    }
+    return ids.length
+  })()
+
+  const CONDS = [
+    { key: 'bookmarked', label: '★ 收藏標記', color: 'yellow' },
+    { key: 'fuzzy',      label: '? 模糊標記', color: 'purple' },
+    { key: 'wrong_gt',   label: '錯題次數',   color: 'red' },
+    { key: 'rate_lt',    label: '答對率',      color: 'blue' },
+  ]
+
+  const btnActive = {
+    yellow: 'bg-yellow-400 border-yellow-400 text-white',
+    purple: 'bg-purple-500 border-purple-500 text-white',
+    red:    'bg-red-500 border-red-500 text-white',
+    blue:   'bg-blue-500 border-blue-500 text-white',
+  }
+  const btnIdle = 'bg-gray-50 border-gray-200 text-gray-500 hover:border-gray-300'
+
+  return (
+    <div className="space-y-5 max-w-2xl">
+      {/* 篩選條件 */}
+      <div className="bg-white rounded-2xl shadow p-5">
+        <div className="font-semibold text-gray-700 mb-3">篩選條件 <span className="text-xs text-gray-400 font-normal">（可複選，取聯集）</span></div>
+        <div className="flex flex-wrap gap-2 mb-4">
+          {CONDS.map(({ key, label, color }) => {
+            const active = conditions.includes(key)
+            return (
+              <button key={key} onClick={() => toggleCond(key)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-bold border transition ${active ? btnActive[color] : btnIdle}`}>
+                {label}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* 條件參數 */}
+        {conditions.includes('wrong_gt') && (
+          <div className="flex items-center gap-3 mb-3 pl-1">
+            <span className="text-sm text-gray-600 whitespace-nowrap">錯題次數 &gt;</span>
+            <input type="number" min={0} max={99} value={wrongThreshold}
+              onChange={e => setWrongThreshold(Number(e.target.value))}
+              className="w-20 border border-gray-200 rounded-lg px-3 py-1 text-sm text-center focus:ring-2 focus:ring-red-300 outline-none"
+            />
+            <span className="text-sm text-gray-400">次</span>
+          </div>
+        )}
+        {conditions.includes('rate_lt') && (
+          <div className="flex items-center gap-3 mb-3 pl-1">
+            <span className="text-sm text-gray-600 whitespace-nowrap">答對率 &lt;</span>
+            <input type="number" min={0} max={100} value={rateThreshold}
+              onChange={e => setRateThreshold(Number(e.target.value))}
+              className="w-20 border border-gray-200 rounded-lg px-3 py-1 text-sm text-center focus:ring-2 focus:ring-blue-300 outline-none"
+            />
+            <span className="text-sm text-gray-400">%</span>
+          </div>
+        )}
+      </div>
+
+      {/* 單元範圍 */}
+      <div className="bg-white rounded-2xl shadow p-5">
+        <div className="font-semibold text-gray-700 mb-3">
+          單元範圍 <span className="text-xs text-gray-400 font-normal">（不選 = 全部單元）</span>
+          {selectedUnits.length > 0 && (
+            <button onClick={() => setSelectedUnits([])}
+              className="ml-2 text-xs text-gray-400 underline hover:text-gray-600">清除</button>
+          )}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {UNITS.map(u => {
+            const active = selectedUnits.includes(u.id)
+            return (
+              <button key={u.id} onClick={() => toggleUnit(u.id)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-left text-sm transition
+                  ${active ? 'border-primary bg-green-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                <span className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 text-xs
+                  ${active ? 'border-primary bg-primary text-white' : 'border-gray-300'}`}>
+                  {active && '✓'}
+                </span>
+                <span className={`font-medium ${active ? 'text-primary' : 'text-gray-700'}`}>{u.name} {u.title_zh}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* 錯誤訊息 */}
+      {errMsg && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">{errMsg}</div>
+      )}
+
+      {/* 開始按鈕 */}
+      <button onClick={handleStart} disabled={loading || conditions.length === 0}
+        className="w-full py-3 rounded-xl bg-primary text-white font-bold text-base hover:bg-green-800 disabled:opacity-40 transition">
+        {loading ? '載入中…' : conditions.length === 0 ? '請選擇篩選條件' : `開始練功（預估 ${previewCount} 題）`}
+      </button>
+    </div>
+  )
+}
+
 // ── 工具 ──────────────────────────────────────────────────────────────────────
 function pct(correct, attempt) {
   if (!attempt) return 0
@@ -337,7 +519,7 @@ function SessionRow({ session, onDelete, deleting }) {
 export default function RecordPage() {
   const { user, loading: authLoading } = useAuth()
   const navigate = useNavigate()
-  const [tab, setTab] = useState('stats')           // stats | sessions
+  const [tab, setTab] = useState('stats')           // stats | sessions | drill
   const [records, setRecords]   = useState([])
   const [sessions, setSessions] = useState([])
   const [loading, setLoading]   = useState(true)
@@ -421,10 +603,11 @@ export default function RecordPage() {
       <p className="text-gray-400 text-sm mb-4">{user.displayName} 的答題統計</p>
 
       {/* Tab 切換 */}
-      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-6 w-fit">
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-6 flex-wrap">
         {[
           { key: 'stats',    label: '📈 統計總覽' },
           { key: 'sessions', label: `🗂 作答紀錄（${sessions.length}）` },
+          { key: 'drill',    label: '💪 練功專區' },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${
@@ -533,6 +716,17 @@ export default function RecordPage() {
           unit={unitDetail}
           records={records}
           onClose={() => setUnitDetail(null)}
+        />
+      )}
+
+      {/* ── Tab: 練功專區 ── */}
+      {tab === 'drill' && (
+        <DrillSetup
+          records={records}
+          onStart={qs => {
+            sessionStorage.setItem('drill_questions', JSON.stringify(qs))
+            navigate('/exam?mode=drill')
+          }}
         />
       )}
 

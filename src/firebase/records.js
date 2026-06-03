@@ -69,7 +69,7 @@ export async function saveExamRecord(uid, questions, answers, meta = {}) {
  */
 export async function getStudentRecords(uid) {
   const snap = await getDocs(collection(db, 'student_records', uid, 'answers'))
-  return snap.docs.map(d => d.data())
+  return snap.docs.map(d => ({ question_id: d.id, ...d.data() }))
 }
 
 /**

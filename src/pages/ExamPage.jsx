@@ -345,7 +345,20 @@ export default function ExamPage() {
   const [saving, setSaving] = useState(false)
 
   // 如果 URL 直接帶了 units 參數（從首頁單元卡片點進來），直接開始
+  // drill 模式：從 sessionStorage 讀取預先篩選好的題目
   useEffect(() => {
+    if (mode === 'drill') {
+      const raw = sessionStorage.getItem('drill_questions')
+      if (raw) {
+        try {
+          const qs = JSON.parse(raw)
+          sessionStorage.removeItem('drill_questions')
+          if (qs.length > 0) { setQuestions(qs); setPhase('exam') }
+          else setError('沒有符合條件的題目。')
+        } catch { setError('題目載入失敗。') }
+      }
+      return
+    }
     if (mode === 'unit' && preUnits.length > 0) {
       loadAndStart({ unitIds: preUnits, count: DEFAULT_COUNT, ratios: null })
     }
@@ -360,7 +373,6 @@ export default function ExamPage() {
       if (ratios) {
         qs = await drawQuestions(unitIds, count, ratios)
       } else {
-        // 單元測驗：平均分配
         qs = await drawQuestions(unitIds, count, null)
       }
       if (qs.length === 0) {
@@ -429,7 +441,7 @@ export default function ExamPage() {
   }
 
   if (phase === 'exam') {
-    const timeLimit = mode === 'mock' ? questions.length * 120 : null
+    const timeLimit = mode === 'mock' ? 4800 : null  // 模擬考固定 80 分鐘
     const correct = pendingAnswers
       ? questions.filter((q, i) => pendingAnswers[i] === q.answer).length
       : 0
