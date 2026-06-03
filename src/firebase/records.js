@@ -44,3 +44,34 @@ export async function getStudentRecords(uid) {
   const snap = await getDocs(collection(db, 'student_records', uid, 'answers'))
   return snap.docs.map(d => d.data())
 }
+
+/**
+ * 儲存單題備註與星號（merge，不影響作答統計）
+ * @param {string} uid
+ * @param {string} questionId
+ * @param {{ note?: string, stars?: number }} data
+ */
+export async function saveQuestionAnnotation(uid, questionId, data) {
+  const ref = doc(db, 'student_records', uid, 'answers', questionId)
+  await setDoc(ref, data, { merge: true })
+}
+
+/**
+ * 批次讀取一組題目的備註與星號
+ * @param {string} uid
+ * @param {string[]} questionIds
+ * @returns {Promise<object>} { [questionId]: { note, stars } }
+ */
+export async function getQuestionAnnotations(uid, questionIds) {
+  const results = {}
+  await Promise.all(questionIds.map(async id => {
+    const snap = await getDoc(doc(db, 'student_records', uid, 'answers', id))
+    if (snap.exists()) {
+      const d = snap.data()
+      results[id] = { note: d.note ?? '', stars: d.stars ?? 0 }
+    } else {
+      results[id] = { note: '', stars: 0 }
+    }
+  }))
+  return results
+}

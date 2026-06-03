@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect, useContext, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { UNIT_MAP } from '../utils/units'
+import { AuthContext } from '../context/AuthContext'
+import { getQuestionAnnotations, saveQuestionAnnotation } from '../firebase/records'
 
 function optionText(question, opt) {
   const o = question.options?.[opt]
@@ -9,12 +11,76 @@ function optionText(question, opt) {
   return [o.en, o.zh].filter(Boolean).join('  ')
 }
 
+// ── 星號選取元件 ──────────────────────────────────────────────────────────────
+function StarPicker({ value, onChange }) {
+  const [hover, setHover] = useState(0)
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map(n => (
+        <button
+          key={n}
+          type="button"
+          onMouseEnter={() => setHover(n)}
+          onMouseLeave={() => setHover(0)}
+          onClick={() => onChange(value === n ? 0 : n)}
+          className="text-xl leading-none transition-transform hover:scale-110 focus:outline-none"
+          title={`${n} 顆星`}
+        >
+          <span className={(hover ? n <= hover : n <= value) ? 'text-amber-400' : 'text-gray-200'}>
+            ★
+          </span>
+        </button>
+      ))}
+      {value > 0 && (
+        <span className="text-xs text-gray-400 ml-1">{value} 顆星</span>
+      )}
+    </div>
+  )
+}
+
 // ── 單題解析卡 ────────────────────────────────────────────────────────────────
-function QuestionResult({ q, userAns, no }) {
+function QuestionResult({ q, userAns, no, annotation, onSaveAnnotation }) {
   const [open, setOpen] = useState(false)
+  const [note, setNote] = useState(annotation?.note ?? '')
+  const [stars, setStars] = useState(annotation?.stars ?? 0)
+  const [saving, setSaving] = useState(false)
+  const debounceRef = useRef(null)
+
+  // annotation 從父層非同步載入，載完後同步到本地 state
+  useEffect(() => {
+    if (annotation) {
+      setNote(annotation.note ?? '')
+      setStars(annotation.stars ?? 0)
+    }
+  }, [annotation])
+
   const correct = q.answer
   const isRight = userAns === correct
   const opts = ['A', 'B', 'C', 'D']
+
+  const saveNote = useCallback((newNote, newStars) => {
+    if (!onSaveAnnotation) return
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(async () => {
+      setSaving(true)
+      await onSaveAnnotation(q.id, { note: newNote, stars: newStars })
+      setSaving(false)
+    }, 800)
+  }, [onSaveAnnotation, q.id])
+
+  function handleNoteChange(e) {
+    const v = e.target.value
+    setNote(v)
+    saveNote(v, stars)
+  }
+
+  function handleStarsChange(v) {
+    setStars(v)
+    // 星號立即存（不 debounce）
+    if (!onSaveAnnotation) return
+    clearTimeout(debounceRef.current)
+    onSaveAnnotation(q.id, { note, stars: v })
+  }
 
   return (
     <div className={`bg-white rounded-2xl shadow mb-3 overflow-hidden border-l-4
@@ -31,10 +97,18 @@ function QuestionResult({ q, userAns, no }) {
           {isRight ? '✓' : userAns ? '✗' : '—'}
         </span>
         <div className="flex-1 min-w-0">
-          <div className="text-xs text-gray-400 mb-0.5">第 {no} 題{q.sources?.length > 0 && `・${q.sources[0]}`}</div>
+          <div className="text-xs text-gray-400 mb-0.5 flex items-center gap-2">
+            <span>第 {no} 題{q.sources?.length > 0 && `・${q.sources[0]}`}</span>
+            {stars > 0 && (
+              <span className="text-amber-400 text-xs">{'★'.repeat(stars)}</span>
+            )}
+          </div>
           <p className="text-sm text-gray-800 leading-relaxed line-clamp-2">
             {q.question_zh || q.question_en || '（無題目文字）'}
           </p>
+          {note && !open && (
+            <p className="text-xs text-blue-500 mt-1 truncate">📝 {note}</p>
+          )}
         </div>
         <span className="text-gray-400 text-xs shrink-0 mt-1">{open ? '▲' : '▼'}</span>
       </button>
@@ -88,6 +162,33 @@ function QuestionResult({ q, userAns, no }) {
               🧠 {q.memory_tips}
             </div>
           )}
+
+          {/* ── 學生標註區 ── */}
+          {onSaveAnnotation && (
+            <div className="border-t border-gray-100 pt-3 space-y-2">
+              {/* 重要性星號 */}
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-500 whitespace-nowrap">重要程度</span>
+                <StarPicker value={stars} onChange={handleStarsChange} />
+              </div>
+
+              {/* 備註欄 */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-gray-500">我的備註</span>
+                  {saving && <span className="text-xs text-gray-300">儲存中…</span>}
+                  {!saving && note && <span className="text-xs text-green-400">✓ 已儲存</span>}
+                </div>
+                <textarea
+                  value={note}
+                  onChange={handleNoteChange}
+                  placeholder="輸入重點筆記…（自動儲存）"
+                  rows={3}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 resize-y focus:ring-2 focus:ring-primary outline-none placeholder-gray-300"
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -97,13 +198,32 @@ function QuestionResult({ q, userAns, no }) {
 // ── 主頁面 ────────────────────────────────────────────────────────────────────
 export default function ResultPage() {
   const navigate = useNavigate()
+  const { user } = useContext(AuthContext)
   const [filter, setFilter] = useState('all') // all | wrong | unanswered
+  const [annotations, setAnnotations] = useState({}) // { [questionId]: { note, stars } }
 
   const raw = sessionStorage.getItem('exam_result')
   const { questions, answers } = useMemo(() => {
     if (!raw) return { questions: [], answers: {} }
     try { return JSON.parse(raw) } catch { return { questions: [], answers: {} } }
   }, [raw])
+
+  // 登入後批次載入所有題目的備註與星號
+  useEffect(() => {
+    if (!user || questions.length === 0) return
+    getQuestionAnnotations(user.uid, questions.map(q => q.id))
+      .then(data => setAnnotations(data))
+      .catch(() => {})
+  }, [user, questions])
+
+  const handleSaveAnnotation = useCallback(async (questionId, data) => {
+    if (!user) return
+    await saveQuestionAnnotation(user.uid, questionId, data)
+    setAnnotations(prev => ({
+      ...prev,
+      [questionId]: { ...prev[questionId], ...data },
+    }))
+  }, [user])
 
   if (!raw || questions.length === 0) {
     return (
@@ -194,8 +314,21 @@ export default function ResultPage() {
         <p className="text-center text-gray-400 py-10">沒有符合條件的題目</p>
       ) : (
         filtered.map(({ q, i, ans }) => (
-          <QuestionResult key={i} q={q} userAns={ans} no={i + 1} />
+          <QuestionResult
+            key={i}
+            q={q}
+            userAns={ans}
+            no={i + 1}
+            annotation={annotations[q.id]}
+            onSaveAnnotation={user ? handleSaveAnnotation : null}
+          />
         ))
+      )}
+
+      {!user && (
+        <p className="text-center text-xs text-gray-400 mt-4">
+          登入後可儲存備註與星號標記
+        </p>
       )}
     </div>
   )
