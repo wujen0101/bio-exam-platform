@@ -83,6 +83,31 @@ export async function getQuestionsByIds(ids) {
   return snaps.filter(s => s.exists()).map(s => ({ id: s.id, ...s.data() }))
 }
 
+/**
+ * 批次補算全部題目的 auto_stars（依 sources 長度）
+ * @returns {Promise<number>} 更新筆數
+ */
+export async function recalcAllAutoStars() {
+  const snap = await getDocs(collection(db, COL))
+  const BATCH_SIZE = 400
+  let updated = 0
+
+  const docs = snap.docs
+  for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+    const chunk = docs.slice(i, i + BATCH_SIZE)
+    const batch = writeBatch(db)
+    for (const d of chunk) {
+      const sources = d.data().sources ?? []
+      const n = sources.length
+      const auto_stars = n >= 3 ? 5 : n === 2 ? 4 : n === 1 ? 3 : 0
+      batch.update(d.ref, { auto_stars })
+      updated++
+    }
+    await batch.commit()
+  }
+  return updated
+}
+
 /** 刪除單題 */
 export async function deleteQuestion(docId) {
   await deleteDoc(doc(db, COL, docId))

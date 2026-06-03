@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { parseDocxQuestions } from '../utils/parseDocx'
-import { importQuestions, getQuestionsByUnit, getAllQuestions, deleteQuestion, updateQuestion } from '../firebase/questions'
+import { importQuestions, getQuestionsByUnit, getAllQuestions, deleteQuestion, updateQuestion, recalcAllAutoStars } from '../firebase/questions'
 import { UNITS } from '../utils/units'
 
 const STEP = { IDLE: 'idle', PARSING: 'parsing', PREVIEW: 'preview', IMPORTING: 'importing', DONE: 'done' }
@@ -196,6 +196,7 @@ function BrowseTab() {
   const [search, setSearch]             = useState('')
   const [selected, setSelected]         = useState(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [recalcing, setRecalcing]       = useState(false)
 
   const loadUnit = useCallback(async (unitId) => {
     setLoading(true); setExpandedId(null); setSearch(''); setFilterReview(false); setSelected(new Set())
@@ -310,7 +311,26 @@ function BrowseTab() {
               <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">⚠️ {needsReviewCount} 需確認</span>
             )}
           </div>
-          <button onClick={() => loadUnit(selectedUnit)} className="text-xs px-2 py-1 border rounded text-gray-500 hover:bg-gray-50">↻ 重新整理</button>
+          <div className="flex gap-2">
+            <button
+              disabled={recalcing}
+              onClick={async () => {
+                setRecalcing(true)
+                try {
+                  const n = await recalcAllAutoStars()
+                  alert(`✅ 已補算 ${n} 題的自動星號`)
+                  loadUnit(selectedUnit)
+                } catch (e) {
+                  alert(`補算失敗：${e.message}`)
+                } finally {
+                  setRecalcing(false)
+                }
+              }}
+              className="text-xs px-2 py-1 border rounded text-amber-600 border-amber-300 hover:bg-amber-50 disabled:opacity-40 whitespace-nowrap transition">
+              {recalcing ? '補算中…' : '★ 補算星號'}
+            </button>
+            <button onClick={() => loadUnit(selectedUnit)} className="text-xs px-2 py-1 border rounded text-gray-500 hover:bg-gray-50">↻ 重新整理</button>
+          </div>
         </div>
 
         <div className="flex gap-2 mb-3">
