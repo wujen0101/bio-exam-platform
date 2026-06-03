@@ -6,7 +6,7 @@ import { getQuestionsByIds } from '../firebase/questions'
 import { UNITS } from '../utils/units'
 
 // ── 練功專區 ──────────────────────────────────────────────────────────────────
-function DrillSetup({ records, onStart }) {
+function DrillSetup({ records, autoStarsMap = {}, onStart }) {
   const [conditions, setConditions] = useState([])        // 多選：bookmarked | fuzzy | wrong_gt | rate_lt | stars_gte
   const [wrongThreshold, setWrongThreshold] = useState(2)
   const [rateThreshold, setRateThreshold]   = useState(60)
@@ -37,7 +37,10 @@ function DrillSetup({ records, onStart }) {
         const rate = Math.round((r.correct_count ?? 0) / r.attempt_count * 100)
         if (rate <= rateThreshold) matched.add(r.question_id)
       }
-      if (conditions.includes('stars_gte') && (r.stars ?? 0) >= starsThreshold) matched.add(r.question_id)
+      if (conditions.includes('stars_gte')) {
+        const effective = (r.stars ?? 0) > 0 ? (r.stars ?? 0) : (autoStarsMap[r.question_id] ?? 0)
+        if (effective >= starsThreshold) matched.add(r.question_id)
+      }
     }
 
     // 再依單元範圍過濾（selectedUnits 空 = 不限）
@@ -82,7 +85,10 @@ function DrillSetup({ records, onStart }) {
         const rate = Math.round((r.correct_count ?? 0) / r.attempt_count * 100)
         if (rate <= rateThreshold) matched.add(r.question_id)
       }
-      if (conditions.includes('stars_gte') && (r.stars ?? 0) >= starsThreshold) matched.add(r.question_id)
+      if (conditions.includes('stars_gte')) {
+        const effective = (r.stars ?? 0) > 0 ? (r.stars ?? 0) : (autoStarsMap[r.question_id] ?? 0)
+        if (effective >= starsThreshold) matched.add(r.question_id)
+      }
     }
     let ids = [...matched]
     if (selectedUnits.length > 0) {
@@ -609,6 +615,7 @@ export default function RecordPage() {
   const [deletingId, setDeletingId] = useState(null)
   const [clearing, setClearing] = useState(false)
   const [unitDetail, setUnitDetail] = useState(null)   // 點選的單元
+  const [autoStarsMap, setAutoStarsMap] = useState({}) // { questionId → auto_stars }
 
   useEffect(() => {
     if (authLoading || !user) return
@@ -616,7 +623,19 @@ export default function RecordPage() {
       getStudentRecords(user.uid),
       getExamSessions(user.uid),
     ])
-      .then(([recs, sess]) => { setRecords(recs); setSessions(sess) })
+      .then(([recs, sess]) => {
+        setRecords(recs)
+        setSessions(sess)
+        // 非同步補拉 question 的 auto_stars（不擋主畫面）
+        const ids = recs.map(r => r.question_id).filter(Boolean)
+        if (ids.length > 0) {
+          getQuestionsByIds(ids).then(qs => {
+            const map = {}
+            for (const q of qs) map[q.id] = q.auto_stars ?? 0
+            setAutoStarsMap(map)
+          }).catch(() => {})
+        }
+      })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [user, authLoading])
@@ -808,6 +827,7 @@ export default function RecordPage() {
       {tab === 'drill' && (
         <DrillSetup
           records={records}
+          autoStarsMap={autoStarsMap}
           onStart={qs => {
             sessionStorage.setItem('drill_questions', JSON.stringify(qs))
             navigate('/exam?mode=drill')
