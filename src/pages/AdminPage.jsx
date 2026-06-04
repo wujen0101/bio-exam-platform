@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { parseDocxQuestions } from '../utils/parseDocx'
 import { importQuestions, getQuestionsByUnit, getAllQuestions, deleteQuestion, updateQuestion, recalcAllAutoStars } from '../firebase/questions'
+import { getAllUsers, getUserLoginHistory } from '../firebase/users'
 import { UNITS } from '../utils/units'
 
 const STEP = { IDLE: 'idle', PARSING: 'parsing', PREVIEW: 'preview', IMPORTING: 'importing', DONE: 'done' }
@@ -13,14 +14,15 @@ export default function AdminPage() {
       <h1 className="text-2xl font-bold mb-1">🧑‍🏫 老師後台</h1>
       <p className="text-gray-500 text-sm mb-4">題庫管理與查詢</p>
 
-      <div className="flex gap-1 mb-6 border-b border-gray-200">
+      <div className="flex gap-1 mb-6 border-b border-gray-200 overflow-x-auto">
         {[
           { key: 'upload', label: '📤 上傳題庫' },
           { key: 'browse', label: '🔍 題庫查詢' },
           { key: 'dupes',  label: '🔁 重複偵測' },
+          { key: 'users',  label: '👥 使用者' },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition -mb-px ${
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition -mb-px whitespace-nowrap ${
               tab === t.key ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}>
             {t.label}
@@ -31,6 +33,7 @@ export default function AdminPage() {
       {tab === 'upload' && <UploadTab />}
       {tab === 'browse' && <BrowseTab />}
       {tab === 'dupes'  && <DupesTab />}
+      {tab === 'users'  && <UsersTab />}
     </div>
   )
 }
@@ -885,6 +888,178 @@ function QuestionDetail({ q }) {
       {q.memory_tips && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
           🧠 {q.memory_tips.slice(0, 150)}{q.memory_tips.length > 150 ? '…' : ''}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Tab 4：使用者管理
+// ══════════════════════════════════════════════════════════════════════════════
+
+function formatDateTime(ts) {
+  if (!ts) return '—'
+  const d = ts.toDate ? ts.toDate() : new Date(ts)
+  return d.toLocaleString('zh-TW', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
+function UsersTab() {
+  const [users, setUsers]       = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [error, setError]       = useState('')
+  const [expanded, setExpanded] = useState(null)   // uid of expanded row
+  const [history, setHistory]   = useState({})     // { [uid]: [...] }
+  const [histLoading, setHistLoading] = useState(false)
+  const [search, setSearch]     = useState('')
+
+  useEffect(() => {
+    getAllUsers()
+      .then(data => { setUsers(data); setLoading(false) })
+      .catch(e  => { setError(e.message); setLoading(false) })
+  }, [])
+
+  async function toggleHistory(uid) {
+    if (expanded === uid) { setExpanded(null); return }
+    setExpanded(uid)
+    if (history[uid]) return  // 已載入
+    setHistLoading(true)
+    try {
+      const logs = await getUserLoginHistory(uid, 20)
+      setHistory(prev => ({ ...prev, [uid]: logs }))
+    } catch (e) {
+      setHistory(prev => ({ ...prev, [uid]: [] }))
+    } finally {
+      setHistLoading(false)
+    }
+  }
+
+  const filtered = users.filter(u =>
+    !search ||
+    u.displayName?.toLowerCase().includes(search.toLowerCase()) ||
+    u.email?.toLowerCase().includes(search.toLowerCase())
+  )
+
+  if (loading) return (
+    <div className="flex justify-center py-16">
+      <div className="animate-spin text-3xl">🧬</div>
+    </div>
+  )
+
+  if (error) return (
+    <div className="bg-red-50 border border-red-300 text-red-700 rounded-lg px-4 py-3 text-sm">{error}</div>
+  )
+
+  return (
+    <div>
+      {/* 統計列 */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
+        <div className="bg-white rounded-xl shadow px-4 py-3 text-center">
+          <div className="text-2xl font-bold text-primary">{users.length}</div>
+          <div className="text-xs text-gray-500">總使用者數</div>
+        </div>
+        <div className="bg-white rounded-xl shadow px-4 py-3 text-center">
+          <div className="text-2xl font-bold text-secondary">
+            {users.reduce((s, u) => s + (u.login_count ?? 0), 0)}
+          </div>
+          <div className="text-xs text-gray-500">總登入次數</div>
+        </div>
+        <div className="bg-white rounded-xl shadow px-4 py-3 text-center col-span-2 sm:col-span-1">
+          <div className="text-2xl font-bold text-accent">
+            {users.filter(u => {
+              if (!u.last_login) return false
+              const d = u.last_login.toDate ? u.last_login.toDate() : new Date(u.last_login)
+              return (Date.now() - d.getTime()) < 7 * 24 * 3600 * 1000
+            }).length}
+          </div>
+          <div className="text-xs text-gray-500">7 天內活躍</div>
+        </div>
+      </div>
+
+      {/* 搜尋 */}
+      <div className="mb-4">
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="搜尋姓名或 Email…"
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none"
+        />
+      </div>
+
+      {/* 使用者清單 */}
+      {filtered.length === 0 ? (
+        <p className="text-center text-gray-400 py-10">找不到使用者</p>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map(u => (
+            <div key={u.uid} className="bg-white rounded-xl shadow overflow-hidden">
+              {/* 使用者列 */}
+              <button
+                onClick={() => toggleHistory(u.uid)}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition"
+              >
+                {/* 頭像 */}
+                {u.photoURL ? (
+                  <img src={u.photoURL} alt={u.displayName}
+                    className="w-9 h-9 rounded-full border border-gray-200 shrink-0" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-sm font-bold shrink-0">
+                    {u.displayName?.[0] ?? '?'}
+                  </div>
+                )}
+
+                {/* 姓名 / Email */}
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm text-gray-800 truncate">{u.displayName ?? '（未知）'}</div>
+                  <div className="text-xs text-gray-400 truncate">{u.email}</div>
+                </div>
+
+                {/* 統計 */}
+                <div className="hidden sm:flex flex-col items-end text-xs text-gray-500 shrink-0">
+                  <span>最後登入：{formatDateTime(u.last_login)}</span>
+                  <span>首次登入：{formatDateTime(u.first_login)}</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="bg-primary/10 text-primary text-xs font-bold px-2 py-0.5 rounded-full">
+                    {u.login_count ?? 0} 次
+                  </span>
+                  <span className="text-gray-400 text-xs">{expanded === u.uid ? '▲' : '▼'}</span>
+                </div>
+              </button>
+
+              {/* 手機版：日期補充 */}
+              <div className="sm:hidden px-4 pb-2 text-xs text-gray-400 flex gap-3">
+                <span>最後：{formatDateTime(u.last_login)}</span>
+                <span>首次：{formatDateTime(u.first_login)}</span>
+              </div>
+
+              {/* 展開：登入歷史 */}
+              {expanded === u.uid && (
+                <div className="border-t border-gray-100 px-4 py-3">
+                  <div className="text-xs font-semibold text-gray-500 mb-2">最近 20 筆登入紀錄</div>
+                  {histLoading && !history[u.uid] ? (
+                    <div className="text-xs text-gray-400">載入中…</div>
+                  ) : (history[u.uid] ?? []).length === 0 ? (
+                    <div className="text-xs text-gray-400">無歷史紀錄（此使用者在功能上線前登入）</div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                      {(history[u.uid] ?? []).map((log, idx) => (
+                        <div key={log.id}
+                          className="bg-gray-50 rounded-lg px-2 py-1.5 text-xs text-gray-600 flex items-center gap-1.5">
+                          <span className="text-gray-300 font-mono">{String(idx + 1).padStart(2, '0')}</span>
+                          <span>{formatDateTime(log.at)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
