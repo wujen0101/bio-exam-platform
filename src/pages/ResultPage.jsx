@@ -347,8 +347,8 @@ export default function ResultPage() {
       {/* 成績摘要 */}
       <div className="bg-white rounded-2xl shadow p-6 mb-6">
         <h1 className="text-xl font-bold text-gray-700 mb-4">測驗結果</h1>
-        <div className="flex items-center gap-6 mb-4">
-          <div className="text-center">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
+          <div className="text-center sm:min-w-[5rem]">
             <div className={`text-5xl font-black ${scoreColor}`}>{score}</div>
             <div className="text-xs text-gray-400 mt-1">分（滿分 100）</div>
           </div>
@@ -371,13 +371,13 @@ export default function ResultPage() {
         <div className="flex gap-3">
           <button
             onClick={() => navigate('/')}
-            className="flex-1 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition text-sm"
+            className="flex-1 py-2.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition text-sm"
           >
             回首頁
           </button>
           <button
             onClick={() => navigate(-1)}
-            className="flex-1 py-2 rounded-lg bg-primary text-white font-medium hover:bg-green-800 transition text-sm"
+            className="flex-1 py-2.5 rounded-lg bg-primary text-white font-medium hover:bg-green-800 transition text-sm"
           >
             再測一次
           </button>

@@ -31,7 +31,7 @@ function LoginPage() {
   }
 
   return (
-    <div className="max-w-md mx-auto mt-20 bg-white rounded-2xl shadow p-8 text-center">
+    <div className="max-w-md mx-auto mt-10 sm:mt-20 bg-white rounded-2xl shadow p-6 sm:p-8 text-center">
       <div className="text-5xl mb-4">🧬</div>
       <h1 className="text-2xl font-bold mb-1">後中醫生物學測驗平台</h1>
       <p className="text-gray-500 mb-8 text-sm">使用 Google 帳號登入以記錄學習進度</p>

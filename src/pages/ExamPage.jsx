@@ -191,7 +191,7 @@ function QuestionCard({ question, index, total, answer, answers, flags, onAnswer
           <button
             key={opt}
             onClick={() => onAnswer(opt)}
-            className={`w-full flex items-start gap-3 px-4 py-3 rounded-xl border-2 text-left transition
+            className={`w-full flex items-start gap-3 px-4 py-3.5 rounded-xl border-2 text-left transition active:scale-[0.99]
               ${answer === opt
                 ? 'border-primary bg-green-50'
                 : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'}`}
@@ -210,7 +210,7 @@ function QuestionCard({ question, index, total, answer, answers, flags, onAnswer
         <button
           onClick={onPrev}
           disabled={index === 0}
-          className="px-5 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition"
+          className="px-5 py-3 rounded-xl border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition text-sm font-medium"
         >
           ← 上一題
         </button>
@@ -218,14 +218,14 @@ function QuestionCard({ question, index, total, answer, answers, flags, onAnswer
         {isLast ? (
           <button
             onClick={onSubmit}
-            className="flex-1 py-2 rounded-lg bg-accent text-white font-bold hover:bg-yellow-600 transition"
+            className="flex-1 py-3 rounded-xl bg-accent text-white font-bold hover:bg-yellow-600 transition"
           >
             交卷
           </button>
         ) : (
           <button
             onClick={onNext}
-            className="flex-1 py-2 rounded-lg bg-primary text-white font-medium hover:bg-green-800 transition"
+            className="flex-1 py-3 rounded-xl bg-primary text-white font-medium hover:bg-green-800 transition"
           >
             下一題 →
           </button>
@@ -233,22 +233,22 @@ function QuestionCard({ question, index, total, answer, answers, flags, onAnswer
       </div>
 
       {/* 題目縮圖列 */}
-      <div className="mt-5 flex flex-wrap gap-1.5">
-        {Array.from({ length: total }, (_, i) => (
-          <button
-            key={i}
-            onClick={() => onNavigate(i)}
-            title={[
-              answers[i] !== undefined ? '已作答' : '未作答',
-            ].join(' ')}
-            className={`w-7 h-7 rounded text-xs font-medium transition relative
-              ${i === index ? 'bg-primary text-white' :
-                answers[i] !== undefined ? 'bg-green-100 text-green-700' :
-                'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
-          >
-            {i + 1}
-          </button>
-        ))}
+      <div className="mt-5 overflow-x-auto pb-1">
+        <div className="flex gap-1.5 min-w-max">
+          {Array.from({ length: total }, (_, i) => (
+            <button
+              key={i}
+              onClick={() => onNavigate(i)}
+              title={answers[i] !== undefined ? '已作答' : '未作答'}
+              className={`w-8 h-8 rounded text-xs font-medium transition shrink-0
+                ${i === index ? 'bg-primary text-white' :
+                  answers[i] !== undefined ? 'bg-green-100 text-green-700' :
+                  'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+            >
+              {i + 1}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   )

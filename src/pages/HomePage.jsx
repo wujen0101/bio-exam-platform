@@ -10,8 +10,8 @@ function HomePage() {
       <p className="text-center text-gray-500 mb-8 text-sm">共 9 單元・38 章・涵蓋中國、慈濟、義守、高醫、清華、中興、中山</p>
 
       {/* 測驗模式 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-        <div className="bg-white rounded-2xl shadow p-6 border-l-4 border-primary">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
+        <div className="bg-white rounded-2xl shadow p-5 sm:p-6 border-l-4 border-primary">
           <h2 className="text-xl font-bold mb-1">📝 單元測驗</h2>
           <p className="text-gray-500 text-sm mb-4">選擇一個或多個單元，針對特定主題精準練習</p>
           <Link
@@ -22,7 +22,7 @@ function HomePage() {
           </Link>
         </div>
 
-        <div className="bg-white rounded-2xl shadow p-6 border-l-4 border-secondary">
+        <div className="bg-white rounded-2xl shadow p-5 sm:p-6 border-l-4 border-secondary">
           <h2 className="text-xl font-bold mb-1">🎯 模擬考</h2>
           <p className="text-gray-500 text-sm mb-4">全部單元，依歷年各校考古題比率或自訂比率出題</p>
           <Link

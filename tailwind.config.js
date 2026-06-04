@@ -6,6 +6,9 @@ export default {
   ],
   theme: {
     extend: {
+      screens: {
+        xs: '375px',
+      },
       colors: {
         primary: '#2E7D32',    // 主色：深綠（醫學感）
         secondary: '#1565C0',  // 副色：深藍
