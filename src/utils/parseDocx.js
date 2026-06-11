@@ -96,9 +96,10 @@ function parseMemoryTips(lines, startIdx) {
  * 解析整份 docx 文字，回傳題目陣列
  * @param {ArrayBuffer} arrayBuffer - File.arrayBuffer() 的結果
  * @param {string} unitId - 題庫所屬單元，例如 "unit1"
+ * @param {string|null} chapterId - 題庫所屬章節，例如 "ch1"，null 表示整個單元
  * @returns {Promise<{ questions: Question[], warnings: string[] }>}
  */
-export async function parseDocxQuestions(arrayBuffer, unitId) {
+export async function parseDocxQuestions(arrayBuffer, unitId, chapterId = null) {
   const result = await mammoth.extractRawText({ arrayBuffer })
   const rawText = result.value
 
@@ -125,7 +126,7 @@ export async function parseDocxQuestions(arrayBuffer, unitId) {
     const block = lines.slice(start, end)
 
     try {
-      const q = parseSingleQuestion(block, unitId, start)
+      const q = parseSingleQuestion(block, unitId, chapterId, start)
       if (q) {
         questions.push(q)
       } else {
@@ -139,7 +140,7 @@ export async function parseDocxQuestions(arrayBuffer, unitId) {
   return { questions, warnings }
 }
 
-function parseSingleQuestion(block, unitId, globalLineOffset) {
+function parseSingleQuestion(block, unitId, chapterId, globalLineOffset) {
   const headerLine = block[0]
   const noMatch = headerLine.match(/題目\s*(\d+)/)
   const questionNo = noMatch ? parseInt(noMatch[1]) : null
@@ -206,6 +207,7 @@ function parseSingleQuestion(block, unitId, globalLineOffset) {
 
   return {
     unit: unitId,
+    chapter: chapterId || null,
     question_no: questionNo,
     sources,
     page_ref,

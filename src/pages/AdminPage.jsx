@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { parseDocxQuestions } from '../utils/parseDocx'
 import { importQuestions, getQuestionsByUnit, getAllQuestions, deleteQuestion, updateQuestion, recalcAllAutoStars } from '../firebase/questions'
 import { getAllUsers, getUserLoginHistory } from '../firebase/users'
-import { UNITS } from '../utils/units'
+import { UNITS, UNIT_MAP } from '../utils/units'
 
 const STEP = { IDLE: 'idle', PARSING: 'parsing', PREVIEW: 'preview', IMPORTING: 'importing', DONE: 'done' }
 
@@ -45,6 +45,7 @@ export default function AdminPage() {
 function UploadTab() {
   const [step, setStep]           = useState(STEP.IDLE)
   const [selectedUnit, setSelectedUnit] = useState('unit1')
+  const [selectedChapter, setSelectedChapter] = useState('')  // '' = 整個單元
   const [fileName, setFileName]   = useState('')
   const [questions, setQuestions] = useState([])
   const [warnings, setWarnings]   = useState([])
@@ -54,6 +55,12 @@ function UploadTab() {
   const [showOnlyReview, setShowOnlyReview] = useState(false)
   const fileRef = useRef()
 
+  // 切換單元時重置章節選擇
+  function handleUnitChange(unitId) {
+    setSelectedUnit(unitId)
+    setSelectedChapter('')
+  }
+
   async function handleFileChange(e) {
     const file = e.target.files[0]
     if (!file) return
@@ -61,7 +68,8 @@ function UploadTab() {
     setFileName(file.name); setError(''); setStep(STEP.PARSING)
     try {
       const buf = await file.arrayBuffer()
-      const { questions: qs, warnings: ws } = await parseDocxQuestions(buf, selectedUnit)
+      const chapterId = selectedChapter || null
+      const { questions: qs, warnings: ws } = await parseDocxQuestions(buf, selectedUnit, chapterId)
       setQuestions(qs); setWarnings(ws); setPreviewIdx(0); setStep(STEP.PREVIEW)
     } catch (err) {
       setError(`解析失敗：${err.message}`); setStep(STEP.IDLE)
@@ -96,10 +104,20 @@ function UploadTab() {
         <div className="bg-white rounded-2xl shadow p-6">
           <h2 className="font-semibold mb-4 text-gray-700">① 選擇單元 + 上傳題庫檔案</h2>
           <label className="block text-sm font-medium text-gray-600 mb-1">題庫所屬單元</label>
-          <select value={selectedUnit} onChange={e => setSelectedUnit(e.target.value)}
-            className="border rounded-lg px-3 py-2 w-full mb-5 text-sm focus:ring-2 focus:ring-primary outline-none">
+          <select value={selectedUnit} onChange={e => handleUnitChange(e.target.value)}
+            className="border rounded-lg px-3 py-2 w-full mb-3 text-sm focus:ring-2 focus:ring-primary outline-none">
             {UNITS.map(u => <option key={u.id} value={u.id}>{u.name} — {u.title_zh}</option>)}
           </select>
+
+          <label className="block text-sm font-medium text-gray-600 mb-1">所屬章節（選填）</label>
+          <select value={selectedChapter} onChange={e => setSelectedChapter(e.target.value)}
+            className="border rounded-lg px-3 py-2 w-full mb-5 text-sm focus:ring-2 focus:ring-primary outline-none">
+            <option value="">— 整個單元（不指定章節）</option>
+            {(UNIT_MAP[selectedUnit]?.chapters ?? []).map(ch => (
+              <option key={ch.id} value={ch.id}>Ch{ch.no} — {ch.zh}</option>
+            ))}
+          </select>
+
           <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl py-10 cursor-pointer hover:border-primary hover:bg-green-50 transition">
             <span className="text-4xl mb-2">📄</span>
             <span className="font-medium text-gray-700">點擊或拖曳 .docx 題庫檔案至此</span>
@@ -190,6 +208,7 @@ function UploadTab() {
 
 function BrowseTab() {
   const [selectedUnit, setSelectedUnit] = useState('unit1')
+  const [selectedChapter, setSelectedChapter] = useState('')  // '' = 全單元
   const [questions, setQuestions]       = useState([])
   const [loading, setLoading]           = useState(false)
   const [unitCounts, setUnitCounts]     = useState({})
@@ -202,7 +221,7 @@ function BrowseTab() {
   const [recalcing, setRecalcing]       = useState(false)
 
   const loadUnit = useCallback(async (unitId) => {
-    setLoading(true); setExpandedId(null); setSearch(''); setFilterReview(false); setSelected(new Set())
+    setLoading(true); setExpandedId(null); setSearch(''); setFilterReview(false); setSelected(new Set()); setSelectedChapter('')
     try {
       const qs = await getQuestionsByUnit(unitId)
       setQuestions(qs)
@@ -266,6 +285,7 @@ function BrowseTab() {
   }
 
   const filtered = questions
+    .filter(q => !selectedChapter || q.chapter === selectedChapter)
     .filter(q => !filterReview || q.needs_review)
     .filter(q => {
       if (!search) return true
@@ -306,6 +326,31 @@ function BrowseTab() {
 
       {/* 題目清單 */}
       <div className="bg-white rounded-2xl shadow p-5">
+        {/* 章節篩選 */}
+        {(UNIT_MAP[selectedUnit]?.chapters?.length ?? 0) > 0 && (
+          <div className="flex gap-1.5 flex-wrap mb-4">
+            <button
+              onClick={() => setSelectedChapter('')}
+              className={`text-xs px-2.5 py-1 rounded-full border transition ${
+                selectedChapter === '' ? 'bg-primary text-white border-primary' : 'border-gray-300 text-gray-500 hover:bg-gray-50'
+              }`}
+            >
+              全部
+            </button>
+            {UNIT_MAP[selectedUnit].chapters.map(ch => (
+              <button
+                key={ch.id}
+                onClick={() => setSelectedChapter(ch.id)}
+                className={`text-xs px-2.5 py-1 rounded-full border transition ${
+                  selectedChapter === ch.id ? 'bg-primary text-white border-primary' : 'border-gray-300 text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                Ch{ch.no} {ch.zh}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <h2 className="font-semibold text-gray-700">{UNITS.find(u => u.id === selectedUnit)?.name} 題目清單</h2>
@@ -619,6 +664,7 @@ function DupesTab() {
 function EditModal({ q, onClose, onSaved }) {
   const [form, setForm] = useState({
     unit:        q.unit        || 'unit1',
+    chapter:     q.chapter     || '',
     answer:      q.answer      || '',
     question_en: q.question_en || '',
     question_zh: q.question_zh || '',
@@ -640,6 +686,7 @@ function EditModal({ q, onClose, onSaved }) {
     try {
       const fields = {
         unit:        form.unit,
+        chapter:     form.chapter || null,
         answer:      form.answer.toUpperCase(),
         question_en: form.question_en || null,
         question_zh: form.question_zh || null,
@@ -673,11 +720,11 @@ function EditModal({ q, onClose, onSaved }) {
         <div className="px-5 py-4 space-y-4 text-sm">
           {error && <div className="bg-red-50 border border-red-300 text-red-700 rounded-lg px-3 py-2 text-xs">{error}</div>}
 
-          {/* 單元 + 答案 */}
+          {/* 單元 + 章節 + 答案 */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">所屬單元</label>
-              <select value={form.unit} onChange={e => set('unit', e.target.value)}
+              <select value={form.unit} onChange={e => { set('unit', e.target.value); set('chapter', '') }}
                 className="border rounded-lg px-3 py-2 w-full text-sm focus:ring-2 focus:ring-primary outline-none">
                 {UNITS.map(u => <option key={u.id} value={u.id}>{u.name} — {u.title_zh}</option>)}
               </select>
@@ -690,6 +737,16 @@ function EditModal({ q, onClose, onSaved }) {
                 {['A','B','C','D','E'].map(k => <option key={k} value={k}>{k}</option>)}
               </select>
             </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">所屬章節（選填）</label>
+            <select value={form.chapter} onChange={e => set('chapter', e.target.value)}
+              className="border rounded-lg px-3 py-2 w-full text-sm focus:ring-2 focus:ring-primary outline-none">
+              <option value="">— 整個單元（不指定章節）</option>
+              {(UNIT_MAP[form.unit]?.chapters ?? []).map(ch => (
+                <option key={ch.id} value={ch.id}>Ch{ch.no} — {ch.zh}</option>
+              ))}
+            </select>
           </div>
 
           {/* 英文題目 */}
