@@ -137,7 +137,15 @@ function UploadTab() {
       {step === STEP.PREVIEW && (
         <div className="space-y-4">
           <div className="bg-white rounded-2xl shadow p-5">
-            <h2 className="font-semibold text-gray-700 mb-3">② 解析結果預覽</h2>
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <h2 className="font-semibold text-gray-700">② 解析結果預覽</h2>
+            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-lg">
+              範圍：{UNIT_MAP[selectedUnit]?.name}
+              {selectedChapter
+                ? ` › Ch${UNIT_MAP[selectedUnit]?.chapters?.find(c => c.id === selectedChapter)?.no} ${UNIT_MAP[selectedUnit]?.chapters?.find(c => c.id === selectedChapter)?.zh}`
+                : '（整個單元）'}
+            </span>
+          </div>
             <div className="grid grid-cols-3 gap-3 text-center mb-3">
               <StatCard label="解析題數" value={questions.length} color="green" />
               <StatCard label="需人工確認" value={needsReviewCount} color={needsReviewCount > 0 ? 'yellow' : 'green'} />
@@ -194,7 +202,7 @@ function UploadTab() {
           <h2 className="text-xl font-bold text-green-700 mb-2">匯入完成！</h2>
           <p className="text-gray-500 mb-1">成功寫入 <strong>{importResult.success}</strong> 題</p>
           {importResult.failed > 0 && <p className="text-red-500 text-sm mb-1">失敗 {importResult.failed} 題</p>}
-          <p className="text-gray-400 text-xs mb-6">已存在的題目將自動更新（不影響學生作答紀錄）</p>
+          <p className="text-gray-400 text-xs mb-6">同一範圍（單元／章節）重複上傳會更新，不同範圍各自獨立不覆蓋</p>
           <button onClick={reset} className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-green-800 transition">繼續上傳其他單元</button>
         </div>
       )}

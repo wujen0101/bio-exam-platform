@@ -28,8 +28,10 @@ export async function importQuestions(questions, uploadedBy) {
 
     for (const q of chunk) {
       try {
-        // docId = unit_題號，例如 unit1_001
-        const docId = `${q.unit}_${String(q.question_no).padStart(3, '0')}`
+        // docId = unit_題號 或 unit_chapter_題號（章節題庫與整單元題庫分開存，互不覆蓋）
+        const docId = q.chapter
+          ? `${q.unit}_${q.chapter}_${String(q.question_no).padStart(3, '0')}`
+          : `${q.unit}_${String(q.question_no).padStart(3, '0')}`
         const ref = doc(db, COL, docId)
         // 依考古題出現次數計算自動星號
         const srcCount = (q.sources ?? []).length
