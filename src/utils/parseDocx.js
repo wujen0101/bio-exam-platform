@@ -150,17 +150,24 @@ function parseSingleQuestion(block, unitId, chapterId, globalLineOffset) {
   let enStart = -1, zhStart = -1, detailStart = -1, memStart = -1, separatorIdx = -1
   for (let i = 1; i < block.length; i++) {
     const l = block[i]
-    if (l.includes('英文原題') && enStart === -1) { enStart = i + 1 }
-    if (l.includes('中文版題目') && zhStart === -1) { zhStart = i + 1 }
-    // 支援純中文格式：只有「📝 題目」區塊（無英文版），需排除「題目 N」標題行
+    // 英文原題標記（支援「英文原題」、「英文題：」、「英文版」等變體）
+    if ((l.includes('英文原題') || /^📝\s*(英文題|英文版)/.test(l)) && enStart === -1) { enStart = i + 1 }
+    // 中文版題目標記（支援「中文版題目」、「中文版：」、「中文題」等變體）
+    if ((l.includes('中文版題目') || /^📝\s*(中文版|中文題)/.test(l)) && zhStart === -1) { zhStart = i + 1 }
+    // 舊格式：「📝 題目」單獨一行作為章節標題，需排除「題目 N」標題行
     if (zhStart === -1 && enStart === -1 &&
         !l.includes('中文版') && !l.includes('英文') && !l.match(/題目\s*\d/) &&
         (l.trimStart().startsWith('題目') || (l.includes('題目') && l.includes('📝')))) {
       zhStart = i + 1
     }
+    // 新格式：「📝 {題目文字}」— 📝 後直接是題目內容，本行即為題目起始
+    if (zhStart === -1 && enStart === -1 &&
+        /^📝\s+\S/.test(l) && !/^📝\s*(英文|中文|題目)/.test(l)) {
+      zhStart = i  // 包含本行（本行含題目文字）
+    }
     if ((l.includes('詳細解說') || l.includes('逐項說明')) && detailStart === -1) { detailStart = i + 1 }
     if ((l.includes('記憶口訣') || l.includes('記憶重點')) && memStart === -1) { memStart = i }
-    if (separatorIdx === -1 && /^-{5,}/.test(l)) { separatorIdx = i }
+    if (separatorIdx === -1 && /^[-─]{5,}/.test(l)) { separatorIdx = i }
   }
 
   // 英文題目 + 選項
@@ -181,7 +188,7 @@ function parseSingleQuestion(block, unitId, chapterId, globalLineOffset) {
   const zhSection = zhStart !== -1
     ? block.slice(zhStart, zhEnd).join(' ')
     : ''
-  const zhQuestion = zhSection.replace(optPat, '').replace(/[-─]+/g, '').trim()
+  const zhQuestion = zhSection.replace(optPat, '').replace(/[-─]+/g, '').replace(/^📝\s*/, '').trim()
   const zhOptions = parseOptions(zhSection)
 
   // 合併選項，支援 A~E
