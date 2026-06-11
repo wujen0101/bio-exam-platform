@@ -233,7 +233,13 @@ function BrowseTab() {
     try {
       const qs = await getQuestionsByUnit(unitId)
       setQuestions(qs)
-      setUnitCounts(prev => ({ ...prev, [unitId]: qs.length }))
+      // 更新該單元的細項計數
+      const byChapter = {}
+      for (const q of qs) {
+        const key = q.chapter || ''
+        byChapter[key] = (byChapter[key] || 0) + 1
+      }
+      setUnitCounts(prev => ({ ...prev, [unitId]: { total: qs.length, byChapter } }))
     } finally {
       setLoading(false)
     }
@@ -245,7 +251,12 @@ function BrowseTab() {
       const counts = {}
       await Promise.all(UNITS.map(async u => {
         const qs = await getQuestionsByUnit(u.id)
-        counts[u.id] = qs.length
+        const byChapter = {}
+        for (const q of qs) {
+          const key = q.chapter || ''
+          byChapter[key] = (byChapter[key] || 0) + 1
+        }
+        counts[u.id] = { total: qs.length, byChapter }
       }))
       setUnitCounts(counts)
     }
@@ -258,7 +269,12 @@ function BrowseTab() {
     if (!window.confirm(`確定要刪除「題目 ${q.question_no}」？此操作無法復原。`)) return
     await deleteQuestion(q.id)
     setQuestions(prev => prev.filter(x => x.id !== q.id))
-    setUnitCounts(prev => ({ ...prev, [selectedUnit]: (prev[selectedUnit] ?? 1) - 1 }))
+    setUnitCounts(prev => {
+      const cur = prev[selectedUnit] ?? { total: 1, byChapter: {} }
+      const chKey = q.chapter || ''
+      const newBy = { ...cur.byChapter, [chKey]: Math.max(0, (cur.byChapter[chKey] ?? 1) - 1) }
+      return { ...prev, [selectedUnit]: { total: Math.max(0, cur.total - 1), byChapter: newBy } }
+    })
     setSelected(prev => { const s = new Set(prev); s.delete(q.id); return s })
   }
 
@@ -268,7 +284,16 @@ function BrowseTab() {
     try {
       await Promise.all([...selected].map(id => deleteQuestion(id)))
       setQuestions(prev => prev.filter(x => !selected.has(x.id)))
-      setUnitCounts(prev => ({ ...prev, [selectedUnit]: (prev[selectedUnit] ?? selected.size) - selected.size }))
+      setUnitCounts(prev => {
+        const cur = prev[selectedUnit] ?? { total: selected.size, byChapter: {} }
+        const newBy = { ...cur.byChapter }
+        const deletedQs = questions.filter(x => selected.has(x.id))
+        for (const dq of deletedQs) {
+          const chKey = dq.chapter || ''
+          newBy[chKey] = Math.max(0, (newBy[chKey] ?? 1) - 1)
+        }
+        return { ...prev, [selectedUnit]: { total: Math.max(0, cur.total - selected.size), byChapter: newBy } }
+      })
       setSelected(new Set())
     } finally {
       setBulkDeleting(false)
@@ -304,7 +329,7 @@ function BrowseTab() {
     })
 
   const needsReviewCount = questions.filter(q => q.needs_review).length
-  const totalCount = Object.values(unitCounts).reduce((a, b) => a + b, 0)
+  const totalCount = Object.values(unitCounts).reduce((a, b) => a + (b?.total ?? 0), 0)
 
   return (
     <div className="space-y-4">
@@ -316,7 +341,11 @@ function BrowseTab() {
         </div>
         <div className="grid grid-cols-3 gap-2">
           {UNITS.map(u => {
-            const count = unitCounts[u.id] ?? '…'
+            const info = unitCounts[u.id]
+            const total = info ? info.total : null
+            const byChapter = info?.byChapter ?? {}
+            const unitOnly = byChapter[''] ?? 0   // chapter=null/'' 的整單元題目
+            const chapterKeys = Object.keys(byChapter).filter(k => k !== '')
             const isSelected = selectedUnit === u.id
             return (
               <button key={u.id} onClick={() => setSelectedUnit(u.id)}
@@ -324,8 +353,28 @@ function BrowseTab() {
                   isSelected ? 'border-primary bg-green-50 text-primary font-semibold' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-600'
                 }`}>
                 <div className="font-medium">{u.name}</div>
-                <div className="text-gray-500 truncate">{u.title_zh}</div>
-                <div className={`mt-1 font-bold text-base ${isSelected ? 'text-primary' : 'text-gray-700'}`}>{count} 題</div>
+                <div className="text-gray-500 truncate mb-1">{u.title_zh}</div>
+                {total === null ? (
+                  <div className="text-gray-400">…</div>
+                ) : (
+                  <>
+                    <div className={`font-bold text-base ${isSelected ? 'text-primary' : 'text-gray-700'}`}>共 {total} 題</div>
+                    <div className="mt-1 space-y-0.5">
+                      {unitOnly > 0 && (
+                        <div className="text-gray-400">整單元：{unitOnly} 題</div>
+                      )}
+                      {chapterKeys.sort().map(chId => {
+                        const ch = UNIT_MAP[u.id]?.chapters?.find(c => c.id === chId)
+                        return (
+                          <div key={chId} className="text-gray-400">
+                            {ch ? `Ch${ch.no}：` : `${chId}：`}{byChapter[chId]} 題
+                          </div>
+                        )
+                      })}
+                      {total === 0 && <div className="text-gray-300">尚未匯入</div>}
+                    </div>
+                  </>
+                )}
               </button>
             )
           })}
