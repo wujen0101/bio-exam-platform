@@ -9,9 +9,9 @@ export const UNITS = [
     title_zh: '細胞生物學',
     exam_ratio: 0.10, // 10%
     chapters: [
-      { no: 1, en: 'Cell Structure and Function', zh: '細胞的構造和功能' },
-      { no: 2, en: 'Cell Membrane',               zh: '細胞膜' },
-      { no: 3, en: 'Cell Signaling',               zh: '細胞訊號傳遞' },
+      { id: 'ch1',  no: 1, en: 'Cell Structure and Function', zh: '細胞的構造和功能' },
+      { id: 'ch2',  no: 2, en: 'Cell Membrane',               zh: '細胞膜' },
+      { id: 'ch3',  no: 3, en: 'Cell Signaling',               zh: '細胞訊號傳遞' },
     ],
   },
   {
@@ -21,17 +21,17 @@ export const UNITS = [
     title_zh: '動物構造和功能',
     exam_ratio: 0.21, // 21%
     chapters: [
-      { no: 4,  en: 'Body Structure and Function',  zh: '身體構造和功能' },
-      { no: 5,  en: 'Neurons and Synapses',         zh: '神經和突觸' },
-      { no: 6,  en: 'Nervous System',               zh: '神經系統' },
-      { no: 7,  en: 'Sensory Physiology',           zh: '感覺' },
-      { no: 8,  en: 'Movement in Animals',          zh: '運動' },
-      { no: 9,  en: 'Animal Transport Systems',     zh: '動物的運輸系統' },
-      { no: 10, en: 'Hormones and the Endocrine',   zh: '激素和內分泌' },
-      { no: 11, en: 'Digestive Systems',            zh: '消化系統' },
-      { no: 12, en: 'Excretory Systems',            zh: '排泄系統' },
-      { no: 13, en: 'Reproductive Systems',         zh: '生殖系統' },
-      { no: 14, en: 'Development in Animal',        zh: '動物發育' },
+      { id: 'ch4',  no: 4,  en: 'Body Structure and Function',  zh: '身體構造和功能' },
+      { id: 'ch5',  no: 5,  en: 'Neurons and Synapses',         zh: '神經和突觸' },
+      { id: 'ch6',  no: 6,  en: 'Nervous System',               zh: '神經系統' },
+      { id: 'ch7',  no: 7,  en: 'Sensory Physiology',           zh: '感覺' },
+      { id: 'ch8',  no: 8,  en: 'Movement in Animals',          zh: '運動' },
+      { id: 'ch9',  no: 9,  en: 'Animal Transport Systems',     zh: '動物的運輸系統' },
+      { id: 'ch10', no: 10, en: 'Hormones and the Endocrine',   zh: '激素和內分泌' },
+      { id: 'ch11', no: 11, en: 'Digestive Systems',            zh: '消化系統' },
+      { id: 'ch12', no: 12, en: 'Excretory Systems',            zh: '排泄系統' },
+      { id: 'ch13', no: 13, en: 'Reproductive Systems',         zh: '生殖系統' },
+      { id: 'ch14', no: 14, en: 'Development in Animal',        zh: '動物發育' },
     ],
   },
   {
@@ -41,8 +41,8 @@ export const UNITS = [
     title_zh: '巨分子及生物化學',
     exam_ratio: 0.08, // 8%
     chapters: [
-      { no: 15, en: 'Biological Macromolecules', zh: '生物巨分子' },
-      { no: 16, en: 'Cellular Respiration',      zh: '細胞呼吸' },
+      { id: 'ch15', no: 15, en: 'Biological Macromolecules', zh: '生物巨分子' },
+      { id: 'ch16', no: 16, en: 'Cellular Respiration',      zh: '細胞呼吸' },
     ],
   },
   {
@@ -52,13 +52,13 @@ export const UNITS = [
     title_zh: '分子生物學',
     exam_ratio: 0.17, // 17%
     chapters: [
-      { no: 17, en: 'Mitosis',                        zh: '有絲分裂' },
-      { no: 18, en: 'Meiosis',                        zh: '減數分裂' },
-      { no: 19, en: 'Mendelian Genetics',             zh: '孟德爾遺傳學' },
-      { no: 20, en: 'Linkage and Chromosomes',        zh: '染色體與連鎖' },
-      { no: 21, en: 'Nucleic Acids and Inheritance',  zh: '核甘酸與遺傳' },
-      { no: 22, en: 'Expression of Genes',            zh: '基因的表現' },
-      { no: 23, en: 'Control of Gene Expression',     zh: '基因表現之控制' },
+      { id: 'ch17', no: 17, en: 'Mitosis',                        zh: '有絲分裂' },
+      { id: 'ch18', no: 18, en: 'Meiosis',                        zh: '減數分裂' },
+      { id: 'ch19', no: 19, en: 'Mendelian Genetics',             zh: '孟德爾遺傳學' },
+      { id: 'ch20', no: 20, en: 'Linkage and Chromosomes',        zh: '染色體與連鎖' },
+      { id: 'ch21', no: 21, en: 'Nucleic Acids and Inheritance',  zh: '核甘酸與遺傳' },
+      { id: 'ch22', no: 22, en: 'Expression of Genes',            zh: '基因的表現' },
+      { id: 'ch23', no: 23, en: 'Control of Gene Expression',     zh: '基因表現之控制' },
     ],
   },
   {
@@ -68,8 +68,8 @@ export const UNITS = [
     title_zh: 'DNA生物科技',
     exam_ratio: 0.04, // 4%
     chapters: [
-      { no: 24, en: 'DNA Technology',          zh: 'DNA科技' },
-      { no: 25, en: 'The Evolution of Genomes', zh: '基因體的演化' },
+      { id: 'ch24', no: 24, en: 'DNA Technology',           zh: 'DNA科技' },
+      { id: 'ch25', no: 25, en: 'The Evolution of Genomes', zh: '基因體的演化' },
     ],
   },
   {
@@ -79,8 +79,8 @@ export const UNITS = [
     title_zh: '微生物免疫學',
     exam_ratio: 0.14, // 14%
     chapters: [
-      { no: 26, en: 'Defenses Against Infection', zh: '感染之防禦' },
-      { no: 27, en: 'Microorganisms',             zh: '微生物' },
+      { id: 'ch26', no: 26, en: 'Defenses Against Infection', zh: '感染之防禦' },
+      { id: 'ch27', no: 27, en: 'Microorganisms',             zh: '微生物' },
     ],
   },
   {
@@ -90,9 +90,9 @@ export const UNITS = [
     title_zh: '植物生物學',
     exam_ratio: 0.08, // 8%
     chapters: [
-      { no: 28, en: 'Plant Structure and Growth',  zh: '植物的構造和生長' },
-      { no: 29, en: 'Plant Signals and Behavior',  zh: '植物的訊號和行為' },
-      { no: 30, en: 'The Diversity of Plants',     zh: '植物的多樣性' },
+      { id: 'ch28', no: 28, en: 'Plant Structure and Growth',  zh: '植物的構造和生長' },
+      { id: 'ch29', no: 29, en: 'Plant Signals and Behavior',  zh: '植物的訊號和行為' },
+      { id: 'ch30', no: 30, en: 'The Diversity of Plants',     zh: '植物的多樣性' },
     ],
   },
   {
@@ -102,10 +102,10 @@ export const UNITS = [
     title_zh: '演化學',
     exam_ratio: 0.11, // 11%
     chapters: [
-      { no: 31, en: 'Fungi',                    zh: '真菌' },
-      { no: 32, en: 'The Diversity of Animals', zh: '動物的多樣性' },
-      { no: 33, en: 'How Evolution Works',      zh: '演化的機制' },
-      { no: 34, en: 'The Origin of Species',    zh: '物種的起源' },
+      { id: 'ch31', no: 31, en: 'Fungi',                    zh: '真菌' },
+      { id: 'ch32', no: 32, en: 'The Diversity of Animals', zh: '動物的多樣性' },
+      { id: 'ch33', no: 33, en: 'How Evolution Works',      zh: '演化的機制' },
+      { id: 'ch34', no: 34, en: 'The Origin of Species',    zh: '物種的起源' },
     ],
   },
   {
@@ -115,16 +115,21 @@ export const UNITS = [
     title_zh: '生態學',
     exam_ratio: 0.07, // 7%
     chapters: [
-      { no: 35, en: 'An Overview of Ecology',      zh: '生態學概論' },
-      { no: 36, en: 'Populations and Life History', zh: '族群和生活史' },
-      { no: 37, en: 'Biodiversity and Communities', zh: '生物多樣性和群落' },
-      { no: 38, en: 'Ecosystems and Conservation', zh: '生態系及保育' },
+      { id: 'ch35', no: 35, en: 'An Overview of Ecology',       zh: '生態學概論' },
+      { id: 'ch36', no: 36, en: 'Populations and Life History',  zh: '族群和生活史' },
+      { id: 'ch37', no: 37, en: 'Biodiversity and Communities',  zh: '生物多樣性和群落' },
+      { id: 'ch38', no: 38, en: 'Ecosystems and Conservation',   zh: '生態系及保育' },
     ],
   },
 ]
 
 // 依 unitId 快速查找
 export const UNIT_MAP = Object.fromEntries(UNITS.map(u => [u.id, u]))
+
+// 依 chapterId 快速查找 { ch1: { id, no, en, zh, unitId } }
+export const CHAPTER_MAP = Object.fromEntries(
+  UNITS.flatMap(u => u.chapters.map(ch => [ch.id, { ...ch, unitId: u.id }]))
+)
 
 // 歷年各校出題比率參考（來源：108–112 各校統計）
 // school_ratios 可供學生選擇「以特定目標學校比率」出模擬考

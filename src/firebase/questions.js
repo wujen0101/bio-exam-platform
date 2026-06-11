@@ -108,6 +108,23 @@ export async function recalcAllAutoStars() {
   return updated
 }
 
+/**
+ * 讀取指定章節的所有題目（支援多章節，自動分批避免 Firestore in 上限 30）
+ * @param {string[]} chapterIds - 例如 ["ch1","ch2"]
+ */
+export async function getQuestionsByChapters(chapterIds) {
+  if (!chapterIds.length) return []
+  const CHUNK = 30
+  const all = []
+  for (let i = 0; i < chapterIds.length; i += CHUNK) {
+    const slice = chapterIds.slice(i, i + CHUNK)
+    const q = query(collection(db, COL), where('chapter', 'in', slice))
+    const snap = await getDocs(q)
+    snap.docs.forEach(d => all.push({ id: d.id, ...d.data() }))
+  }
+  return all.sort((a, b) => (a.question_no ?? 0) - (b.question_no ?? 0))
+}
+
 /** 刪除單題 */
 export async function deleteQuestion(docId) {
   await deleteDoc(doc(db, COL, docId))

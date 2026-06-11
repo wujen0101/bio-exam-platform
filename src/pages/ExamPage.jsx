@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { drawQuestions } from '../firebase/questions'
+import { drawQuestions, getQuestionsByChapters } from '../firebase/questions'
 import { saveExamRecord, saveQuestionAnnotation } from '../firebase/records'
 import { useAuth } from '../context/AuthContext'
 import { UNITS, SCHOOL_RATIOS } from '../utils/units'
@@ -56,42 +56,127 @@ function MockSetup({ onStart }) {
 }
 
 // ── 單元測驗設定面板 ──────────────────────────────────────────────────────────
-function UnitSetup({ preSelected, onStart }) {
-  const [selected, setSelected] = useState(preSelected || [])
+function UnitSetup({ preSelected, preChapters, onStart }) {
+  const [selectedUnits, setSelectedUnits] = useState(preSelected || [])
+  const [selectedChapters, setSelectedChapters] = useState(preChapters || [])
+  const [expandedUnits, setExpandedUnits] = useState(new Set())
   const [count, setCount] = useState(DEFAULT_COUNT)
 
-  function toggle(id) {
-    setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  function toggleUnit(unitId, unitChapterIds) {
+    if (selectedUnits.includes(unitId)) {
+      setSelectedUnits(prev => prev.filter(x => x !== unitId))
+    } else {
+      setSelectedUnits(prev => [...prev, unitId])
+      // 選整個單元時，移除該單元已個別選的章節（避免重複）
+      setSelectedChapters(prev => prev.filter(id => !unitChapterIds.includes(id)))
+    }
   }
 
+  function toggleChapter(chId, unitId) {
+    if (selectedChapters.includes(chId)) {
+      setSelectedChapters(prev => prev.filter(x => x !== chId))
+    } else {
+      setSelectedChapters(prev => [...prev, chId])
+      // 選個別章節時，移除父單元的整體勾選
+      setSelectedUnits(prev => prev.filter(x => x !== unitId))
+    }
+  }
+
+  function toggleExpand(unitId) {
+    setExpandedUnits(prev => {
+      const next = new Set(prev)
+      next.has(unitId) ? next.delete(unitId) : next.add(unitId)
+      return next
+    })
+  }
+
+  const hasSelection = selectedUnits.length > 0 || selectedChapters.length > 0
+
   function handleStart() {
-    if (selected.length === 0) return
-    onStart({ unitIds: selected, count, ratios: null })
+    if (!hasSelection) return
+    onStart({ unitIds: selectedUnits, chapterIds: selectedChapters, count, ratios: null })
   }
 
   return (
     <div className="max-w-2xl mx-auto mt-4">
-      <h2 className="text-lg font-bold mb-4 text-primary">📝 選擇單元</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-5">
-        {UNITS.map(u => (
-          <button
-            key={u.id}
-            onClick={() => toggle(u.id)}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition
-              ${selected.includes(u.id)
-                ? 'border-primary bg-green-50'
-                : 'border-gray-200 hover:border-gray-300'}`}
-          >
-            <span className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0
-              ${selected.includes(u.id) ? 'border-primary bg-primary' : 'border-gray-300'}`}>
-              {selected.includes(u.id) && <span className="text-white text-xs">✓</span>}
-            </span>
-            <div className="min-w-0">
-              <div className="text-sm font-semibold text-gray-800">{u.name} {u.title_zh}</div>
-              <div className="text-xs text-gray-400">{u.chapters.length} 章・{Math.round(u.exam_ratio * 100)}%</div>
+      <h2 className="text-lg font-bold mb-1 text-primary">📝 選擇單元或章節</h2>
+      <p className="text-xs text-gray-400 mb-4">勾選整個單元，或點 ▸ 展開後選擇特定章節</p>
+      <div className="space-y-2 mb-5">
+        {UNITS.map(u => {
+          const isUnitSelected = selectedUnits.includes(u.id)
+          const unitChIds = u.chapters.map(c => c.id)
+          const selectedFromUnit = unitChIds.filter(id => selectedChapters.includes(id))
+          const isExpanded = expandedUnits.has(u.id)
+
+          return (
+            <div key={u.id} className={`rounded-xl border-2 transition
+              ${isUnitSelected ? 'border-primary bg-green-50'
+                : selectedFromUnit.length > 0 ? 'border-primary/40 bg-green-50/50'
+                : 'border-gray-200'}`}>
+              <div className="flex items-center gap-2 px-4 py-3">
+                {/* 單元 checkbox */}
+                <button
+                  onClick={() => toggleUnit(u.id, unitChIds)}
+                  className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0
+                    ${isUnitSelected ? 'border-primary bg-primary' : 'border-gray-300'}`}
+                >
+                  {isUnitSelected && <span className="text-white text-xs">✓</span>}
+                  {!isUnitSelected && selectedFromUnit.length > 0 && (
+                    <span className="w-2.5 h-2.5 rounded-sm bg-primary/50 block" />
+                  )}
+                </button>
+
+                {/* 單元標題（點擊等同 checkbox） */}
+                <button
+                  onClick={() => toggleUnit(u.id, unitChIds)}
+                  className="flex-1 text-left min-w-0"
+                >
+                  <div className="text-sm font-semibold text-gray-800">{u.name} {u.title_zh}</div>
+                  <div className="text-xs text-gray-400">
+                    {u.chapters.length} 章・{Math.round(u.exam_ratio * 100)}%
+                    {selectedFromUnit.length > 0 && !isUnitSelected && (
+                      <span className="ml-1.5 text-primary font-medium">已選 {selectedFromUnit.length} 章</span>
+                    )}
+                  </div>
+                </button>
+
+                {/* 展開/收合按鈕 */}
+                <button
+                  onClick={() => toggleExpand(u.id)}
+                  className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition text-sm"
+                  title="展開章節"
+                >
+                  {isExpanded ? '▾' : '▸'}
+                </button>
+              </div>
+
+              {/* 章節列表 */}
+              {isExpanded && (
+                <div className="border-t border-gray-100 px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {u.chapters.map(ch => {
+                    const isChSelected = selectedChapters.includes(ch.id)
+                    return (
+                      <button
+                        key={ch.id}
+                        onClick={() => toggleChapter(ch.id, u.id)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-left transition text-xs
+                          ${isChSelected
+                            ? 'border-primary bg-green-50 text-primary'
+                            : 'border-gray-200 hover:border-gray-300 text-gray-600'}`}
+                      >
+                        <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0
+                          ${isChSelected ? 'border-primary bg-primary' : 'border-gray-300'}`}>
+                          {isChSelected && <span className="text-white text-[10px]">✓</span>}
+                        </span>
+                        <span>Ch{ch.no} {ch.zh}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
-          </button>
-        ))}
+          )
+        })}
       </div>
 
       <div className="bg-white rounded-xl shadow px-5 py-4 mb-4">
@@ -107,10 +192,10 @@ function UnitSetup({ preSelected, onStart }) {
 
       <button
         onClick={handleStart}
-        disabled={selected.length === 0}
+        disabled={!hasSelection}
         className="w-full bg-primary text-white py-2.5 rounded-lg font-medium hover:bg-green-800 disabled:opacity-40 transition"
       >
-        {selected.length === 0 ? '請選擇至少一個單元' : `開始測驗（${count} 題）`}
+        {!hasSelection ? '請選擇至少一個單元或章節' : `開始測驗（${count} 題）`}
       </button>
     </div>
   )
@@ -336,6 +421,7 @@ export default function ExamPage() {
   const { user } = useAuth()
   const mode = searchParams.get('mode') || 'unit'
   const preUnits = searchParams.get('units')?.split(',').filter(Boolean) || []
+  const preChapters = searchParams.get('chapters')?.split(',').filter(Boolean) || []
 
   const [phase, setPhase] = useState('setup')  // setup | loading | exam
   const [questions, setQuestions] = useState([])
@@ -359,22 +445,35 @@ export default function ExamPage() {
       }
       return
     }
-    if (mode === 'unit' && preUnits.length > 0) {
-      loadAndStart({ unitIds: preUnits, count: DEFAULT_COUNT, ratios: null })
+    if (mode === 'unit' && preChapters.length > 0) {
+      loadAndStart({ unitIds: [], chapterIds: preChapters, count: DEFAULT_COUNT, ratios: null })
+    } else if (mode === 'unit' && preUnits.length > 0) {
+      loadAndStart({ unitIds: preUnits, chapterIds: [], count: DEFAULT_COUNT, ratios: null })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function loadAndStart({ unitIds, count, ratios }) {
+  async function loadAndStart({ unitIds = [], chapterIds = [], count, ratios }) {
     setPhase('loading')
     setError('')
     try {
-      let qs
-      if (ratios) {
-        qs = await drawQuestions(unitIds, count, ratios)
-      } else {
-        qs = await drawQuestions(unitIds, count, null)
+      let qs = []
+
+      if (chapterIds.length > 0 || unitIds.length > 0) {
+        // 章節模式：直接抓指定章節題目
+        const chapterQs = chapterIds.length > 0
+          ? await getQuestionsByChapters(chapterIds)
+          : []
+        // 單元模式：抓整個單元題目
+        const unitQs = unitIds.length > 0
+          ? await drawQuestions(unitIds, count, ratios)
+          : []
+        // 合併、去重、洗牌、取 count 題
+        const seen = new Set()
+        const pool = [...chapterQs, ...unitQs].filter(q => seen.has(q.id) ? false : seen.add(q.id))
+        qs = pool.sort(() => Math.random() - 0.5).slice(0, count)
       }
+
       if (qs.length === 0) {
         setError('尚未有題目，請老師先至後台匯入題庫。')
         setPhase('setup')
@@ -525,7 +624,7 @@ export default function ExamPage() {
 
       {mode === 'mock'
         ? <MockSetup onStart={loadAndStart} />
-        : <UnitSetup preSelected={preUnits} onStart={loadAndStart} />
+        : <UnitSetup preSelected={preUnits} preChapters={preChapters} onStart={loadAndStart} />
       }
     </div>
   )
