@@ -152,6 +152,12 @@ function parseSingleQuestion(block, unitId, chapterId, globalLineOffset) {
     const l = block[i]
     if (l.includes('英文原題') && enStart === -1) { enStart = i + 1 }
     if (l.includes('中文版題目') && zhStart === -1) { zhStart = i + 1 }
+    // 支援純中文格式：只有「📝 題目」區塊（無英文版），需排除「題目 N」標題行
+    if (zhStart === -1 && enStart === -1 &&
+        !l.includes('中文版') && !l.includes('英文') && !l.match(/題目\s*\d/) &&
+        (l.trimStart().startsWith('題目') || (l.includes('題目') && l.includes('📝')))) {
+      zhStart = i + 1
+    }
     if ((l.includes('詳細解說') || l.includes('逐項說明')) && detailStart === -1) { detailStart = i + 1 }
     if ((l.includes('記憶口訣') || l.includes('記憶重點')) && memStart === -1) { memStart = i }
   }
@@ -164,9 +170,13 @@ function parseSingleQuestion(block, unitId, chapterId, globalLineOffset) {
   const enQuestion = enSection.replace(optPat, '').trim()
   const enOptions = parseOptions(enSection)
 
-  // 中文題目 + 選項
-  const zhSection = (zhStart !== -1 && detailStart !== -1)
-    ? block.slice(zhStart, detailStart - 1).join(' ')
+  // 中文題目 + 選項（純中文格式無 detailStart 時，用正確答案行作為結尾）
+  const answerLineIdxForSection = block.findIndex(l => /正確答案/.test(l))
+  const zhEnd = detailStart !== -1
+    ? detailStart - 1
+    : answerLineIdxForSection !== -1 ? answerLineIdxForSection : block.length
+  const zhSection = zhStart !== -1
+    ? block.slice(zhStart, zhEnd).join(' ')
     : ''
   const zhQuestion = zhSection.replace(optPat, '').replace(/[-─]+/g, '').trim()
   const zhOptions = parseOptions(zhSection)
