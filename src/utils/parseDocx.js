@@ -147,7 +147,7 @@ function parseSingleQuestion(block, unitId, chapterId, globalLineOffset) {
   const sources = parseSources(headerLine)
   const page_ref = parsePageRef(headerLine)
 
-  let enStart = -1, zhStart = -1, detailStart = -1, memStart = -1
+  let enStart = -1, zhStart = -1, detailStart = -1, memStart = -1, separatorIdx = -1
   for (let i = 1; i < block.length; i++) {
     const l = block[i]
     if (l.includes('英文原題') && enStart === -1) { enStart = i + 1 }
@@ -160,6 +160,7 @@ function parseSingleQuestion(block, unitId, chapterId, globalLineOffset) {
     }
     if ((l.includes('詳細解說') || l.includes('逐項說明')) && detailStart === -1) { detailStart = i + 1 }
     if ((l.includes('記憶口訣') || l.includes('記憶重點')) && memStart === -1) { memStart = i }
+    if (separatorIdx === -1 && /^-{5,}/.test(l)) { separatorIdx = i }
   }
 
   // 英文題目 + 選項
@@ -170,9 +171,11 @@ function parseSingleQuestion(block, unitId, chapterId, globalLineOffset) {
   const enQuestion = enSection.replace(optPat, '').trim()
   const enOptions = parseOptions(enSection)
 
-  // 中文題目 + 選項（純中文格式無 detailStart 時，用正確答案行作為結尾）
+  // 中文題目 + 選項（用分隔線或 detailStart 或正確答案行作為結尾）
   const answerLineIdxForSection = block.findIndex(l => /正確答案/.test(l))
-  const zhEnd = detailStart !== -1
+  const zhEnd = separatorIdx !== -1
+    ? separatorIdx
+    : detailStart !== -1
     ? detailStart - 1
     : answerLineIdxForSection !== -1 ? answerLineIdxForSection : block.length
   const zhSection = zhStart !== -1
