@@ -6,20 +6,55 @@ import { getQuestionsByIds, getAllQuestions } from '../firebase/questions'
 import { UNITS } from '../utils/units'
 
 // ── 練功專區 ──────────────────────────────────────────────────────────────────
+// 從 question_id 提取 chapter id（格式 unit1_ch1_001 → ch1；unit1_001 → null）
+function chapterFromQid(qid) {
+  const parts = (qid ?? '').split('_')
+  return parts.length === 3 ? parts[1] : null
+}
+
 function DrillSetup({ records, autoStarsMap = {}, onStart }) {
-  const [conditions, setConditions] = useState([])        // 多選：bookmarked | fuzzy | wrong_gt | rate_lt | stars_gte
+  const [conditions, setConditions]       = useState([])
   const [wrongThreshold, setWrongThreshold] = useState(2)
   const [rateThreshold, setRateThreshold]   = useState(60)
   const [starsThreshold, setStarsThreshold] = useState(3)
-  const [selectedUnits, setSelectedUnits]   = useState([])  // [] = 全部
+  const [selectedChapters, setSelectedChapters] = useState([])  // [] = 全部
+  const [expandedUnits, setExpandedUnits]       = useState([])  // 展開的單元
   const [loading, setLoading] = useState(false)
-  const [errMsg, setErrMsg] = useState('')
+  const [errMsg, setErrMsg]   = useState('')
 
   function toggleCond(key) {
     setConditions(prev => prev.includes(key) ? prev.filter(c => c !== key) : [...prev, key])
   }
-  function toggleUnit(id) {
-    setSelectedUnits(prev => prev.includes(id) ? prev.filter(u => u !== id) : [...prev, id])
+
+  // 切換整個單元（全選/全消該單元所有章節）
+  function toggleUnit(u) {
+    const chIds = u.chapters.map(c => c.id)
+    const allSelected = chIds.every(id => selectedChapters.includes(id))
+    if (allSelected) {
+      setSelectedChapters(prev => prev.filter(id => !chIds.includes(id)))
+    } else {
+      setSelectedChapters(prev => [...new Set([...prev, ...chIds])])
+    }
+  }
+
+  // 切換單一章節
+  function toggleChapter(chId) {
+    setSelectedChapters(prev =>
+      prev.includes(chId) ? prev.filter(id => id !== chId) : [...prev, chId]
+    )
+  }
+
+  function toggleUnitExpand(uid) {
+    setExpandedUnits(prev => prev.includes(uid) ? prev.filter(id => id !== uid) : [...prev, uid])
+  }
+
+  // 判斷一筆 record 是否符合章節篩選
+  function recordInScope(r) {
+    if (selectedChapters.length === 0) return true
+    const ch = chapterFromQid(r.question_id)
+    if (ch) return selectedChapters.includes(ch)
+    // 無 chapter（整單元題）：該單元任一章被選中即納入
+    return UNITS.find(u => u.id === r.unit)?.chapters.some(c => selectedChapters.includes(c.id)) ?? false
   }
 
   async function handleStart() {
@@ -31,10 +66,8 @@ function DrillSetup({ records, autoStarsMap = {}, onStart }) {
       const matched = new Set()
       const recordConds = conditions.filter(c => c !== 'stars_gte')
 
-      // records 條件（收藏、模糊、錯題次數、答對率）
       for (const r of records) {
-        const unitOk = selectedUnits.length === 0 || selectedUnits.includes(r.unit)
-        if (!unitOk) continue
+        if (!recordInScope(r)) continue
         if (recordConds.includes('bookmarked') && r.bookmarked) matched.add(r.question_id)
         if (recordConds.includes('fuzzy')      && r.fuzzy)      matched.add(r.question_id)
         if (recordConds.includes('wrong_gt')   && (r.wrong_count ?? 0) >= wrongThreshold) matched.add(r.question_id)
@@ -44,26 +77,22 @@ function DrillSetup({ records, autoStarsMap = {}, onStart }) {
         }
       }
 
-      // 星號條件：查全部題目（不限於練習過的）
       if (conditions.includes('stars_gte')) {
         const allQs = await getAllQuestions()
         for (const q of allQs) {
-          const unitOk = selectedUnits.length === 0 || selectedUnits.includes(q.unit)
-          if (!unitOk) continue
-          const stars = (q.auto_stars ?? 0)
-          if (stars >= starsThreshold) matched.add(q.id)
+          if (selectedChapters.length > 0) {
+            const inScope = selectedChapters.includes(q.chapter) ||
+              (!q.chapter && UNITS.find(u => u.id === q.unit)?.chapters.some(c => selectedChapters.includes(c.id)))
+            if (!inScope) continue
+          }
+          if ((q.auto_stars ?? 0) >= starsThreshold) matched.add(q.id)
         }
       }
 
       const ids = [...matched]
-      if (ids.length === 0) {
-        setErrMsg('沒有符合條件的題目，請調整篩選設定。')
-        return
-      }
+      if (ids.length === 0) { setErrMsg('沒有符合條件的題目，請調整篩選設定。'); return }
 
       const qs = await getQuestionsByIds(ids)
-
-      // 隨機打亂
       for (let i = qs.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [qs[i], qs[j]] = [qs[j], qs[i]]
@@ -76,13 +105,11 @@ function DrillSetup({ records, autoStarsMap = {}, onStart }) {
     }
   }
 
-  // 預估符合題數（stars_gte 用 autoStarsMap 估算；若 map 空則僅估其他條件）
   const previewCount = (() => {
     if (conditions.length === 0) return 0
     const matched = new Set()
     for (const r of records) {
-      const unitOk = selectedUnits.length === 0 || selectedUnits.includes(r.unit)
-      if (!unitOk) continue
+      if (!recordInScope(r)) continue
       if (conditions.includes('bookmarked') && r.bookmarked) matched.add(r.question_id)
       if (conditions.includes('fuzzy')      && r.fuzzy)      matched.add(r.question_id)
       if (conditions.includes('wrong_gt')   && (r.wrong_count ?? 0) >= wrongThreshold) matched.add(r.question_id)
@@ -105,7 +132,6 @@ function DrillSetup({ records, autoStarsMap = {}, onStart }) {
     { key: 'rate_lt',    label: '答對率',      color: 'blue' },
     { key: 'stars_gte',  label: '★ 星號等級', color: 'amber' },
   ]
-
   const btnActive = {
     yellow: 'bg-yellow-400 border-yellow-400 text-white',
     purple: 'bg-purple-500 border-purple-500 text-white',
@@ -131,8 +157,6 @@ function DrillSetup({ records, autoStarsMap = {}, onStart }) {
             )
           })}
         </div>
-
-        {/* 條件參數 */}
         {conditions.includes('wrong_gt') && (
           <div className="flex items-center gap-3 mb-3 pl-1">
             <span className="text-sm text-gray-600 whitespace-nowrap">錯題次數 &ge;</span>
@@ -157,7 +181,7 @@ function DrillSetup({ records, autoStarsMap = {}, onStart }) {
           <div className="flex items-center gap-3 mb-3 pl-1">
             <span className="text-sm text-gray-600 whitespace-nowrap">星號等級 &ge;</span>
             <div className="flex gap-1">
-              {[1, 2, 3, 4, 5].map(n => (
+              {[1,2,3,4,5].map(n => (
                 <button key={n} type="button" onClick={() => setStarsThreshold(n)}
                   className={`w-8 h-8 rounded-lg text-sm font-bold border transition
                     ${starsThreshold === n ? 'bg-amber-500 border-amber-500 text-white' : 'border-gray-200 text-gray-400 hover:border-amber-300'}`}>
@@ -173,36 +197,70 @@ function DrillSetup({ records, autoStarsMap = {}, onStart }) {
       {/* 單元範圍 */}
       <div className="bg-white rounded-2xl shadow p-5">
         <div className="font-semibold text-gray-700 mb-3">
-          單元範圍 <span className="text-xs text-gray-400 font-normal">（不選 = 全部單元）</span>
-          {selectedUnits.length > 0 && (
-            <button onClick={() => setSelectedUnits([])}
+          單元範圍 <span className="text-xs text-gray-400 font-normal">（不選 = 全部）</span>
+          {selectedChapters.length > 0 && (
+            <button onClick={() => setSelectedChapters([])}
               className="ml-2 text-xs text-gray-400 underline hover:text-gray-600">清除</button>
           )}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="space-y-1">
           {UNITS.map(u => {
-            const active = selectedUnits.includes(u.id)
+            const chIds      = u.chapters.map(c => c.id)
+            const allSel     = chIds.every(id => selectedChapters.includes(id))
+            const someSel    = chIds.some(id => selectedChapters.includes(id))
+            const isExpanded = expandedUnits.includes(u.id)
             return (
-              <button key={u.id} onClick={() => toggleUnit(u.id)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-left text-sm transition
-                  ${active ? 'border-primary bg-green-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                <span className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 text-xs
-                  ${active ? 'border-primary bg-primary text-white' : 'border-gray-300'}`}>
-                  {active && '✓'}
-                </span>
-                <span className={`font-medium ${active ? 'text-primary' : 'text-gray-700'}`}>{u.name} {u.title_zh}</span>
-              </button>
+              <div key={u.id} className="border border-gray-100 rounded-xl overflow-hidden">
+                {/* 單元列 */}
+                <div className="flex items-center gap-2 px-3 py-2">
+                  {/* 單元 checkbox */}
+                  <button onClick={() => toggleUnit(u)}
+                    className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 text-xs transition
+                      ${allSel ? 'border-primary bg-primary text-white'
+                        : someSel ? 'border-primary bg-green-100 text-primary'
+                        : 'border-gray-300 hover:border-primary'}`}>
+                    {allSel ? '✓' : someSel ? '–' : ''}
+                  </button>
+                  {/* 單元名稱（點擊展開章節） */}
+                  <button onClick={() => toggleUnitExpand(u.id)}
+                    className="flex-1 flex items-center gap-2 text-left">
+                    <span className={`text-sm font-medium ${allSel || someSel ? 'text-primary' : 'text-gray-700'}`}>
+                      {u.name}
+                    </span>
+                    <span className="text-xs text-gray-400">{u.title_zh}</span>
+                    <span className="ml-auto text-gray-300 text-xs">{isExpanded ? '▾' : '▸'}</span>
+                  </button>
+                </div>
+                {/* 章節列表 */}
+                {isExpanded && (
+                  <div className="border-t border-gray-100 px-3 pb-2 pt-1 flex flex-col gap-0.5 bg-gray-50">
+                    {u.chapters.map(ch => {
+                      const sel = selectedChapters.includes(ch.id)
+                      return (
+                        <button key={ch.id} onClick={() => toggleChapter(ch.id)}
+                          className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition
+                            ${sel ? 'bg-green-50' : 'hover:bg-white'}`}>
+                          <span className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 text-xs transition
+                            ${sel ? 'border-primary bg-primary text-white' : 'border-gray-300 hover:border-primary'}`}>
+                            {sel && '✓'}
+                          </span>
+                          <span className={`text-xs font-medium w-8 shrink-0 ${sel ? 'text-primary' : 'text-gray-400'}`}>Ch{ch.no}</span>
+                          <span className={`text-xs ${sel ? 'text-green-800' : 'text-gray-500'}`}>{ch.en}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             )
           })}
         </div>
       </div>
 
-      {/* 錯誤訊息 */}
       {errMsg && (
         <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">{errMsg}</div>
       )}
 
-      {/* 開始按鈕 */}
       <button onClick={handleStart} disabled={loading || conditions.length === 0}
         className="w-full py-3 rounded-xl bg-primary text-white font-bold text-base hover:bg-green-800 disabled:opacity-40 transition">
         {loading ? '載入中…' : conditions.length === 0 ? '請選擇篩選條件' : `開始練功（預估 ${previewCount} 題）`}
