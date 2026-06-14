@@ -541,6 +541,8 @@ function SessionRow({ session, onDelete, deleting }) {
     .map(uid => UNITS.find(u => u.id === uid)?.name ?? uid)
     .join('、')
 
+  const [selectedIdx, setSelectedIdx] = useState(null)  // 點選的題目 index
+
   async function handleExpand() {
     const next = !expanded
     setExpanded(next)
@@ -554,6 +556,9 @@ function SessionRow({ session, onDelete, deleting }) {
       finally { setLoadingQ(false) }
     }
   }
+
+  const selectedDetail = selectedIdx != null ? session.detail[selectedIdx] : null
+  const selectedQ      = selectedDetail ? questions?.[selectedDetail.question_id] : null
 
   return (
     <div className="border border-gray-100 rounded-xl overflow-hidden">
@@ -591,102 +596,130 @@ function SessionRow({ session, onDelete, deleting }) {
         </button>
       </div>
 
-      {/* 展開：逐題明細 */}
+      {/* 展開：逐題列表（點選才顯示詳細） */}
       {expanded && session.detail && (
         <div className="border-t border-gray-100 bg-gray-50">
           {loadingQ ? (
             <div className="text-center py-6 text-gray-400 text-sm">載入中…</div>
           ) : (
-            <div className="divide-y divide-gray-100">
-              {session.detail.map((d, i) => {
-                const q = questions?.[d.question_id]
-                const opts = q ? ['A','B','C','D','E'].filter(k => q.options?.[k]?.en || q.options?.[k]?.zh) : []
+            <div className="divide-y divide-gray-100 max-h-72 overflow-y-auto">
+              {session.detail.map((d, i) => (
+                <button key={i} onClick={() => setSelectedIdx(i)}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-white transition text-left">
+                  <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center font-bold text-xs
+                    ${d.is_correct ? 'bg-green-100 text-green-700' :
+                      d.user_ans ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-400'}`}>
+                    {d.is_correct ? '✓' : d.user_ans ? '✗' : '—'}
+                  </span>
+                  <span className="text-xs text-gray-500 shrink-0">第 {i + 1} 題</span>
+                  <span className="text-xs text-gray-400 shrink-0">{d.unit}</span>
+                  <span className="flex-1 text-xs truncate text-gray-500">
+                    {questions?.[d.question_id]?.question_zh || questions?.[d.question_id]?.question_en || ''}
+                  </span>
+                  {d.user_ans
+                    ? <span className={`shrink-0 text-xs font-medium ${d.is_correct ? 'text-green-600' : 'text-red-500'}`}>
+                        答 {d.user_ans}{!d.is_correct && `（正確 ${d.correct_ans}）`}
+                      </span>
+                    : <span className="shrink-0 text-xs text-gray-400">未作答</span>
+                  }
+                  <span className="text-gray-300 text-xs shrink-0">›</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 點選題目後的詳細 Modal */}
+      {selectedIdx != null && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-3 py-6 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl">
+            {/* 頭部 */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs
+                  ${selectedDetail?.is_correct ? 'bg-green-100 text-green-700' :
+                    selectedDetail?.user_ans ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-400'}`}>
+                  {selectedDetail?.is_correct ? '✓' : selectedDetail?.user_ans ? '✗' : '—'}
+                </span>
+                <span className="font-semibold text-gray-700">第 {selectedIdx + 1} 題</span>
+                <span className="text-xs text-gray-400">{selectedDetail?.unit}</span>
+                {selectedQ?.sources?.length > 0 && (
+                  <span className="text-xs text-gray-400">・{selectedQ.sources.join('、')}</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setSelectedIdx(i => Math.max(0, i - 1))}
+                  disabled={selectedIdx === 0}
+                  className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-400 hover:text-gray-600 disabled:opacity-30">◀</button>
+                <button onClick={() => setSelectedIdx(i => Math.min(session.detail.length - 1, i + 1))}
+                  disabled={selectedIdx === session.detail.length - 1}
+                  className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-400 hover:text-gray-600 disabled:opacity-30">▶</button>
+                <button onClick={() => setSelectedIdx(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none ml-1">✕</button>
+              </div>
+            </div>
+
+            <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+              {selectedQ ? (() => {
+                const d    = selectedDetail
+                const opts = ['A','B','C','D','E'].filter(k => selectedQ.options?.[k]?.en || selectedQ.options?.[k]?.zh)
                 function optText(k) {
-                  const o = q?.options?.[k]
+                  const o = selectedQ.options?.[k]
                   if (!o) return '—'
                   return [o.zh, o.en].filter(Boolean).join('　')
                 }
                 return (
-                  <div key={i} className="px-4 py-4">
-                    {/* 題號 + 作答狀態 */}
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs
-                        ${d.is_correct ? 'bg-green-100 text-green-700' :
-                          d.user_ans ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-400'}`}>
-                        {d.is_correct ? '✓' : d.user_ans ? '✗' : '—'}
-                      </span>
-                      <span className="text-xs font-semibold text-gray-600">第 {i + 1} 題</span>
-                      <span className="text-xs text-gray-400">{d.unit}</span>
-                      <span className="ml-auto text-xs">
-                        {d.user_ans
-                          ? <span className={d.is_correct ? 'text-green-600 font-medium' : 'text-red-500 font-medium'}>
-                              答 {d.user_ans}
-                              {!d.is_correct && <span className="text-gray-400 font-normal">　正確答案：{d.correct_ans}</span>}
-                            </span>
-                          : <span className="text-gray-400">未作答　正確答案：{d.correct_ans}</span>
-                        }
-                      </span>
+                  <>
+                    {/* 題目 */}
+                    {selectedQ.question_zh && <p className="text-sm text-gray-800 leading-relaxed font-medium">{selectedQ.question_zh}</p>}
+                    {selectedQ.question_en && <p className="text-xs text-gray-500 leading-relaxed bg-blue-50 rounded-lg px-3 py-2">{selectedQ.question_en}</p>}
+
+                    {/* 選項 */}
+                    <div className="space-y-1.5">
+                      {opts.map(k => {
+                        const isCorrect = k === d.correct_ans
+                        const isUser    = k === d.user_ans
+                        const isWrong   = isUser && !isCorrect
+                        return (
+                          <div key={k} className={`flex gap-2 px-3 py-2 rounded-lg text-sm border
+                            ${isCorrect ? 'border-green-400 bg-green-50 text-green-800 font-semibold'
+                              : isWrong ? 'border-red-300 bg-red-50 text-red-700'
+                              : 'border-gray-100 text-gray-600'}`}>
+                            <span className="font-bold shrink-0">{k}.</span>
+                            <span className="flex-1">{optText(k)}</span>
+                            {isCorrect && <span className="shrink-0 text-green-600 text-xs">✓ 正確</span>}
+                            {isWrong   && <span className="shrink-0 text-red-400 text-xs">✗ 你的答案</span>}
+                          </div>
+                        )
+                      })}
                     </div>
 
-                    {q ? (
-                      <>
-                        {/* 題目文字 */}
-                        {q.question_zh && <p className="text-sm text-gray-800 leading-relaxed mb-1">{q.question_zh}</p>}
-                        {q.question_en && <p className="text-xs text-gray-500 leading-relaxed mb-2">{q.question_en}</p>}
-
-                        {/* 選項 */}
-                        {opts.length > 0 && (
-                          <div className="space-y-1 mb-3">
-                            {opts.map(k => {
-                              const isCorrect = k === d.correct_ans
-                              const isUser    = k === d.user_ans
-                              const isWrong   = isUser && !isCorrect
-                              return (
-                                <div key={k} className={`flex gap-2 px-2.5 py-1.5 rounded-lg text-xs border
-                                  ${isCorrect ? 'border-green-400 bg-green-50 text-green-800 font-semibold'
-                                    : isWrong ? 'border-red-300 bg-red-50 text-red-700'
-                                    : 'border-gray-100 text-gray-500'}`}>
-                                  <span className="font-bold shrink-0 w-4">{k}.</span>
-                                  <span className="flex-1">{optText(k)}</span>
-                                  {isCorrect && <span className="shrink-0 text-green-600">✓</span>}
-                                  {isWrong   && <span className="shrink-0 text-red-400">✗ 你的答案</span>}
-                                </div>
-                              )
-                            })}
+                    {/* 解說 */}
+                    {selectedQ.explanations && (
+                      <div className="space-y-1">
+                        <div className="text-xs font-semibold text-gray-500">選項解說</div>
+                        {opts.map(k => selectedQ.explanations[k] && (
+                          <div key={k} className="text-xs text-gray-600 flex gap-1.5">
+                            <span className="font-bold shrink-0">{k}.</span>
+                            <span>{selectedQ.explanations[k]}</span>
                           </div>
-                        )}
-
-                        {/* 解說（只顯示正確選項 & 錯誤選項） */}
-                        {q.explanations && (
-                          <div className="space-y-1 mb-2">
-                            {[d.correct_ans, d.user_ans && d.user_ans !== d.correct_ans ? d.user_ans : null]
-                              .filter(Boolean)
-                              .map(k => q.explanations[k] && (
-                                <div key={k} className={`text-xs rounded-lg px-3 py-2 flex gap-1.5
-                                  ${k === d.correct_ans ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'}`}>
-                                  <span className="font-bold shrink-0">{k}.</span>
-                                  <span>{q.explanations[k]}</span>
-                                </div>
-                              ))
-                            }
-                          </div>
-                        )}
-
-                        {/* 記憶口訣 */}
-                        {q.memory_tips && (
-                          <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-xs text-amber-800">
-                            🧠 {q.memory_tips}
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <p className="text-xs text-gray-400 italic">（題目資料未找到）</p>
+                        ))}
+                      </div>
                     )}
-                  </div>
+
+                    {/* 記憶口訣 */}
+                    {selectedQ.memory_tips && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+                        🧠 {selectedQ.memory_tips}
+                      </div>
+                    )}
+                  </>
                 )
-              })}
+              })() : (
+                <p className="text-sm text-gray-400 text-center py-6">（題目資料未找到）</p>
+              )}
             </div>
-          )}
+          </div>
         </div>
       )}
     </div>
