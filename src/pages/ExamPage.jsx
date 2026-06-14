@@ -429,6 +429,7 @@ export default function ExamPage() {
   const [pendingAnswers, setPendingAnswers] = useState(null)  // 等待確認是否儲存
   const [pendingFlags, setPendingFlags] = useState({})
   const [saving, setSaving] = useState(false)
+  const [usedChapters, setUsedChapters] = useState(preChapters)
 
   // 如果 URL 直接帶了 units 參數（從首頁單元卡片點進來），直接開始
   // drill 模式：從 sessionStorage 讀取預先篩選好的題目
@@ -454,6 +455,7 @@ export default function ExamPage() {
   }, [])
 
   async function loadAndStart({ unitIds = [], chapterIds = [], count, ratios }) {
+    setUsedChapters(chapterIds)
     setPhase('loading')
     setError('')
     try {
@@ -506,7 +508,7 @@ export default function ExamPage() {
         await saveExamRecord(user.uid, questions, pendingAnswers, {
           mode,
           units: [...new Set(questions.map(q => q.unit))],
-          chapters: preChapters.length > 0 ? preChapters : [],
+          chapters: usedChapters,
         })
         // 儲存收藏/模糊標記
         const flagWrites = Object.entries(pendingFlags).map(([idx, f]) => {
