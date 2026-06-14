@@ -1,11 +1,21 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { UNITS } from '../utils/units'
+import { getQuestionCounts } from '../firebase/questions'
 
 const UNIT_ICONS = ['🔬','🫀','🧪','🧬','💉','🦠','🌿','🦕','🌍']
 
 function HomePage() {
   const [expandedUnit, setExpandedUnit] = useState(null)
+  const [unitCounts, setUnitCounts] = useState({})
+  const [chapterCounts, setChapterCounts] = useState({})
+
+  useEffect(() => {
+    getQuestionCounts(UNITS).then(({ unitCounts, chapterCounts }) => {
+      setUnitCounts(unitCounts)
+      setChapterCounts(chapterCounts)
+    })
+  }, [])
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -55,9 +65,16 @@ function HomePage() {
                     >
                       {unit.name}
                     </Link>
-                    <span className="text-xs bg-gray-100 text-gray-500 rounded px-1.5 py-0.5 shrink-0">
-                      {Math.round(unit.exam_ratio * 100)}%
-                    </span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {unitCounts[unit.id] != null && (
+                        <span className="text-xs bg-green-50 text-green-700 rounded px-1.5 py-0.5">
+                          {unitCounts[unit.id]}題
+                        </span>
+                      )}
+                      <span className="text-xs bg-gray-100 text-gray-500 rounded px-1.5 py-0.5">
+                        {Math.round(unit.exam_ratio * 100)}%
+                      </span>
+                    </div>
                   </div>
                   <div className="text-xs text-gray-500 truncate">{unit.title_zh}</div>
                 </div>
@@ -82,7 +99,10 @@ function HomePage() {
                     >
                       <span className="text-gray-300">│</span>
                       <span className="font-medium text-gray-400 w-8 shrink-0">Ch{ch.no}</span>
-                      <span>{ch.zh}</span>
+                      <span className="flex-1">{ch.zh}</span>
+                      {chapterCounts[ch.id] != null && (
+                        <span className="shrink-0 text-gray-400">{chapterCounts[ch.id]}題</span>
+                      )}
                     </Link>
                   ))}
                 </div>

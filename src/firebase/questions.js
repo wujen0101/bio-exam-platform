@@ -4,7 +4,7 @@
 
 import {
   collection, doc, setDoc, deleteDoc, updateDoc, getDocs,
-  query, where, writeBatch, serverTimestamp,
+  query, where, writeBatch, serverTimestamp, getCountFromServer,
 } from 'firebase/firestore'
 import { db } from './config'
 
@@ -125,6 +125,36 @@ export async function getQuestionsByChapters(chapterIds) {
     snap.docs.forEach(d => all.push({ id: d.id, ...d.data() }))
   }
   return all.sort((a, b) => (a.question_no ?? 0) - (b.question_no ?? 0))
+}
+
+/**
+ * 取得各單元與章節的題目數量（使用 Firestore count aggregation）
+ * @param {import('../utils/units').Unit[]} units - UNITS 陣列
+ * @returns {Promise<{ unitCounts: object, chapterCounts: object }>}
+ */
+export async function getQuestionCounts(units) {
+  const unitIds = units.map(u => u.id)
+  const chapterIds = units.flatMap(u => u.chapters.map(ch => ch.id))
+
+  const [unitSnaps, chapterSnaps] = await Promise.all([
+    Promise.all(
+      unitIds.map(uid =>
+        getCountFromServer(query(collection(db, COL), where('unit', '==', uid)))
+          .then(s => [uid, s.data().count])
+      )
+    ),
+    Promise.all(
+      chapterIds.map(cid =>
+        getCountFromServer(query(collection(db, COL), where('chapter', '==', cid)))
+          .then(s => [cid, s.data().count])
+      )
+    ),
+  ])
+
+  return {
+    unitCounts: Object.fromEntries(unitSnaps),
+    chapterCounts: Object.fromEntries(chapterSnaps),
+  }
 }
 
 /** 刪除單題 */
