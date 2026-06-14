@@ -612,16 +612,9 @@ function SessionRow({ session, onDelete, deleting }) {
                     {d.is_correct ? '✓' : d.user_ans ? '✗' : '—'}
                   </span>
                   <span className="text-xs text-gray-500 shrink-0">第 {i + 1} 題</span>
-                  <span className="text-xs text-gray-400 shrink-0">{d.unit}</span>
                   <span className="flex-1 text-xs truncate text-gray-500">
-                    {questions?.[d.question_id]?.question_zh || questions?.[d.question_id]?.question_en || ''}
+                    {questions?.[d.question_id]?.question_zh || questions?.[d.question_id]?.question_en || d.unit}
                   </span>
-                  {d.user_ans
-                    ? <span className={`shrink-0 text-xs font-medium ${d.is_correct ? 'text-green-600' : 'text-red-500'}`}>
-                        答 {d.user_ans}{!d.is_correct && `（正確 ${d.correct_ans}）`}
-                      </span>
-                    : <span className="shrink-0 text-xs text-gray-400">未作答</span>
-                  }
                   <span className="text-gray-300 text-xs shrink-0">›</span>
                 </button>
               ))}
