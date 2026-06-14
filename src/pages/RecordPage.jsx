@@ -526,6 +526,9 @@ function UnitDetailModal({ unit, records, onClose }) {
 // ── 單次測驗紀錄列 ────────────────────────────────────────────────────────────
 function SessionRow({ session, onDelete, deleting }) {
   const [expanded, setExpanded] = useState(false)
+  const [questions, setQuestions] = useState(null)   // null = 尚未載入
+  const [loadingQ, setLoadingQ]   = useState(false)
+
   const rate = session.score ?? pct(session.correct, session.total)
   const date = session.created_at?.seconds
     ? new Date(session.created_at.seconds * 1000).toLocaleString('zh-TW', {
@@ -538,12 +541,26 @@ function SessionRow({ session, onDelete, deleting }) {
     .map(uid => UNITS.find(u => u.id === uid)?.name ?? uid)
     .join('、')
 
+  async function handleExpand() {
+    const next = !expanded
+    setExpanded(next)
+    if (next && questions === null && session.detail?.length) {
+      setLoadingQ(true)
+      try {
+        const ids = session.detail.map(d => d.question_id).filter(Boolean)
+        const qs  = await getQuestionsByIds(ids)
+        setQuestions(Object.fromEntries(qs.map(q => [q.id, q])))
+      } catch { setQuestions({}) }
+      finally { setLoadingQ(false) }
+    }
+  }
+
   return (
     <div className="border border-gray-100 rounded-xl overflow-hidden">
       {/* 摘要列 */}
       <div className="flex items-center gap-3 px-4 py-3 bg-white">
         <button
-          onClick={() => setExpanded(v => !v)}
+          onClick={handleExpand}
           className="flex-1 flex items-center gap-3 text-left min-w-0"
         >
           <div className={`shrink-0 w-12 h-12 rounded-xl flex flex-col items-center justify-center font-black text-white text-sm ${scoreBg(rate)}`}>
@@ -576,26 +593,100 @@ function SessionRow({ session, onDelete, deleting }) {
 
       {/* 展開：逐題明細 */}
       {expanded && session.detail && (
-        <div className="border-t border-gray-100 px-4 py-3 bg-gray-50 space-y-1 max-h-72 overflow-y-auto">
-          <div className="text-xs text-gray-400 mb-2">逐題作答明細</div>
-          {session.detail.map((d, i) => (
-            <div key={i} className="flex items-center gap-2 text-xs">
-              <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center font-bold
-                ${d.is_correct ? 'bg-green-100 text-green-700' :
-                  d.user_ans ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-400'}`}>
-                {d.is_correct ? '✓' : d.user_ans ? '✗' : '—'}
-              </span>
-              <span className="text-gray-500 shrink-0">第 {i + 1} 題</span>
-              <span className="text-gray-400 shrink-0">{d.unit}</span>
-              {d.user_ans && (
-                <span className={d.is_correct ? 'text-green-600' : 'text-red-400'}>
-                  答 {d.user_ans}
-                  {!d.is_correct && <span className="text-gray-400">（正確 {d.correct_ans}）</span>}
-                </span>
-              )}
-              {!d.user_ans && <span className="text-gray-300">未作答</span>}
+        <div className="border-t border-gray-100 bg-gray-50">
+          {loadingQ ? (
+            <div className="text-center py-6 text-gray-400 text-sm">載入中…</div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {session.detail.map((d, i) => {
+                const q = questions?.[d.question_id]
+                const opts = q ? ['A','B','C','D','E'].filter(k => q.options?.[k]?.en || q.options?.[k]?.zh) : []
+                function optText(k) {
+                  const o = q?.options?.[k]
+                  if (!o) return '—'
+                  return [o.zh, o.en].filter(Boolean).join('　')
+                }
+                return (
+                  <div key={i} className="px-4 py-4">
+                    {/* 題號 + 作答狀態 */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs
+                        ${d.is_correct ? 'bg-green-100 text-green-700' :
+                          d.user_ans ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-400'}`}>
+                        {d.is_correct ? '✓' : d.user_ans ? '✗' : '—'}
+                      </span>
+                      <span className="text-xs font-semibold text-gray-600">第 {i + 1} 題</span>
+                      <span className="text-xs text-gray-400">{d.unit}</span>
+                      <span className="ml-auto text-xs">
+                        {d.user_ans
+                          ? <span className={d.is_correct ? 'text-green-600 font-medium' : 'text-red-500 font-medium'}>
+                              答 {d.user_ans}
+                              {!d.is_correct && <span className="text-gray-400 font-normal">　正確答案：{d.correct_ans}</span>}
+                            </span>
+                          : <span className="text-gray-400">未作答　正確答案：{d.correct_ans}</span>
+                        }
+                      </span>
+                    </div>
+
+                    {q ? (
+                      <>
+                        {/* 題目文字 */}
+                        {q.question_zh && <p className="text-sm text-gray-800 leading-relaxed mb-1">{q.question_zh}</p>}
+                        {q.question_en && <p className="text-xs text-gray-500 leading-relaxed mb-2">{q.question_en}</p>}
+
+                        {/* 選項 */}
+                        {opts.length > 0 && (
+                          <div className="space-y-1 mb-3">
+                            {opts.map(k => {
+                              const isCorrect = k === d.correct_ans
+                              const isUser    = k === d.user_ans
+                              const isWrong   = isUser && !isCorrect
+                              return (
+                                <div key={k} className={`flex gap-2 px-2.5 py-1.5 rounded-lg text-xs border
+                                  ${isCorrect ? 'border-green-400 bg-green-50 text-green-800 font-semibold'
+                                    : isWrong ? 'border-red-300 bg-red-50 text-red-700'
+                                    : 'border-gray-100 text-gray-500'}`}>
+                                  <span className="font-bold shrink-0 w-4">{k}.</span>
+                                  <span className="flex-1">{optText(k)}</span>
+                                  {isCorrect && <span className="shrink-0 text-green-600">✓</span>}
+                                  {isWrong   && <span className="shrink-0 text-red-400">✗ 你的答案</span>}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+
+                        {/* 解說（只顯示正確選項 & 錯誤選項） */}
+                        {q.explanations && (
+                          <div className="space-y-1 mb-2">
+                            {[d.correct_ans, d.user_ans && d.user_ans !== d.correct_ans ? d.user_ans : null]
+                              .filter(Boolean)
+                              .map(k => q.explanations[k] && (
+                                <div key={k} className={`text-xs rounded-lg px-3 py-2 flex gap-1.5
+                                  ${k === d.correct_ans ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'}`}>
+                                  <span className="font-bold shrink-0">{k}.</span>
+                                  <span>{q.explanations[k]}</span>
+                                </div>
+                              ))
+                            }
+                          </div>
+                        )}
+
+                        {/* 記憶口訣 */}
+                        {q.memory_tips && (
+                          <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-xs text-amber-800">
+                            🧠 {q.memory_tips}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-xs text-gray-400 italic">（題目資料未找到）</p>
+                    )}
+                  </div>
+                )
+              })}
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>
