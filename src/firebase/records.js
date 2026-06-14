@@ -51,8 +51,9 @@ export async function saveExamRecord(uid, questions, answers, meta = {}) {
     collection(db, 'student_records', uid, 'exams'),
     {
       created_at: serverTimestamp(),
-      mode:       meta.mode  || 'unit',
-      units:      meta.units || [],
+      mode:       meta.mode     || 'unit',
+      units:      meta.units    || [],
+      chapters:   meta.chapters || [],
       total:      questions.length,
       correct,
       wrong,

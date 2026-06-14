@@ -540,6 +540,15 @@ function SessionRow({ session, onDelete, deleting }) {
   const unitsLabel = (session.units ?? [])
     .map(uid => UNITS.find(u => u.id === uid)?.name ?? uid)
     .join('、')
+  const chaptersLabel = (session.chapters ?? [])
+    .map(cid => {
+      for (const u of UNITS) {
+        const ch = u.chapters.find(c => c.id === cid)
+        if (ch) return `Ch${ch.no}`
+      }
+      return cid
+    })
+    .join('、')
 
   const [selectedIdx, setSelectedIdx] = useState(null)  // 點選的題目 index
 
@@ -575,7 +584,7 @@ function SessionRow({ session, onDelete, deleting }) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-medium text-gray-700">{modeLabel}</span>
-              {unitsLabel && <span className="text-xs text-gray-400 truncate">{unitsLabel}</span>}
+              {unitsLabel && <span className="text-xs text-gray-400 truncate">{unitsLabel}{chaptersLabel ? `・${chaptersLabel}` : ''}</span>}
             </div>
             <div className="text-xs text-gray-400 mt-0.5">{date}</div>
             <div className="flex gap-3 mt-1 text-xs">

@@ -506,6 +506,7 @@ export default function ExamPage() {
         await saveExamRecord(user.uid, questions, pendingAnswers, {
           mode,
           units: [...new Set(questions.map(q => q.unit))],
+          chapters: preChapters.length > 0 ? preChapters : [],
         })
         // 儲存收藏/模糊標記
         const flagWrites = Object.entries(pendingFlags).map(([idx, f]) => {
