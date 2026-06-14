@@ -625,6 +625,15 @@ function SessionRow({ session, onDelete, deleting }) {
 
   const [selectedIdx, setSelectedIdx] = useState(null)  // 點選的題目 index
 
+  // 從 question 物件取得 "Unit 1 (Ch1)" 格式字串
+  function qScopeLabel(q) {
+    if (!q) return ''
+    const u = UNITS.find(u => u.id === q.unit)
+    if (!u) return q.unit ?? ''
+    const ch = q.chapter ? u.chapters.find(c => c.id === q.chapter) : null
+    return ch ? `${u.name} (Ch${ch.no})` : u.name
+  }
+
   async function handleExpand() {
     const next = !expanded
     setExpanded(next)
@@ -695,7 +704,10 @@ function SessionRow({ session, onDelete, deleting }) {
                   </span>
                   <span className="text-xs text-gray-500 shrink-0">第 {i + 1} 題</span>
                   <span className="flex-1 text-xs truncate text-gray-500">
-                    {questions?.[d.question_id]?.question_zh || questions?.[d.question_id]?.question_en || d.unit}
+                    {questions?.[d.question_id]?.question_zh || questions?.[d.question_id]?.question_en || ''}
+                  </span>
+                  <span className="shrink-0 text-xs text-gray-400 whitespace-nowrap">
+                    {qScopeLabel(questions?.[d.question_id])}
                   </span>
                   <span className="text-gray-300 text-xs shrink-0">›</span>
                 </button>
@@ -718,7 +730,7 @@ function SessionRow({ session, onDelete, deleting }) {
                   {selectedDetail?.is_correct ? '✓' : selectedDetail?.user_ans ? '✗' : '—'}
                 </span>
                 <span className="font-semibold text-gray-700">第 {selectedIdx + 1} 題</span>
-                <span className="text-xs text-gray-400">{selectedDetail?.unit}</span>
+                <span className="text-xs text-gray-400">{qScopeLabel(selectedQ)}</span>
                 {selectedQ?.sources?.length > 0 && (
                   <span className="text-xs text-gray-400">・{selectedQ.sources.join('、')}</span>
                 )}
