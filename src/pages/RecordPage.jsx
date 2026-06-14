@@ -595,18 +595,33 @@ function SessionRow({ session, onDelete, deleting }) {
       })
     : '—'
   const modeLabel = session.mode === 'mock' ? '🎯 模擬考' : '📝 單元測驗'
-  const unitsLabel = (session.units ?? [])
-    .map(uid => UNITS.find(u => u.id === uid)?.name ?? uid)
-    .join('、')
-  const chaptersLabel = (session.chapters ?? [])
-    .map(cid => {
-      for (const u of UNITS) {
-        const ch = u.chapters.find(c => c.id === cid)
-        if (ch) return `Ch${ch.no}`
-      }
-      return cid
-    })
-    .join('、')
+  // 將章節依所屬單元分組，產生 "Unit 1 (Ch1、Ch2)・Unit 2 (Ch4)" 格式
+  const scopeLabel = (() => {
+    const chapters = session.chapters ?? []
+    const units    = session.units    ?? []
+    if (chapters.length === 0 && units.length === 0) return ''
+
+    const parts = []
+
+    // 先處理有章節的單元（chapters 欄位）
+    const handledUnits = new Set()
+    for (const u of UNITS) {
+      const unitChs = u.chapters.filter(c => chapters.includes(c.id))
+      if (unitChs.length === 0) continue
+      handledUnits.add(u.id)
+      const chStr = unitChs.map(c => `Ch${c.no}`).join('、')
+      parts.push(`${u.name} (${chStr})`)
+    }
+
+    // 再處理整單元（units 欄位，且未被章節分組涵蓋）
+    for (const uid of units) {
+      if (handledUnits.has(uid)) continue
+      const u = UNITS.find(u => u.id === uid)
+      parts.push(u?.name ?? uid)
+    }
+
+    return parts.join('・')
+  })()
 
   const [selectedIdx, setSelectedIdx] = useState(null)  // 點選的題目 index
 
@@ -642,7 +657,7 @@ function SessionRow({ session, onDelete, deleting }) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-medium text-gray-700">{modeLabel}</span>
-              {unitsLabel && <span className="text-xs text-gray-400 truncate">{unitsLabel}{chaptersLabel ? `・${chaptersLabel}` : ''}</span>}
+              {scopeLabel && <span className="text-xs text-gray-400 truncate">{scopeLabel}</span>}
             </div>
             <div className="text-xs text-gray-400 mt-0.5">{date}</div>
             <div className="flex gap-3 mt-1 text-xs">
