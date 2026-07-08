@@ -110,7 +110,7 @@ export async function parseDocxQuestions(arrayBuffer, unitId, chapterId = null) 
 
   const questionStarts = []
   for (let i = 0; i < lines.length; i++) {
-    if (/^題目\s*[Qq]?\d+/.test(lines[i])) {
+    if (/^題目\s*[A-Za-z]?\d+/.test(lines[i])) {
       questionStarts.push(i)
     }
   }
@@ -142,7 +142,7 @@ export async function parseDocxQuestions(arrayBuffer, unitId, chapterId = null) 
 
 function parseSingleQuestion(block, unitId, chapterId, globalLineOffset) {
   const headerLine = block[0]
-  const noMatch = headerLine.match(/題目\s*[Qq]?(\d+)/)
+  const noMatch = headerLine.match(/題目\s*[A-Za-z]?(\d+)/)
   const questionNo = noMatch ? parseInt(noMatch[1]) : null
   const sources = parseSources(headerLine)
   const page_ref = parsePageRef(headerLine)
