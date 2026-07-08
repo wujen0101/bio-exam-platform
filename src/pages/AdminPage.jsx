@@ -196,12 +196,20 @@ function UploadTab() {
                 return (
                   <div>
                     {q?.needs_review && (
-                      <div className={`flex items-center justify-between mb-3 px-3 py-2 rounded-lg border text-sm ${isExcluded ? 'bg-red-50 border-red-300 text-red-700' : 'bg-yellow-50 border-yellow-300 text-yellow-800'}`}>
-                        <span>{isExcluded ? '⛔ 此題已排除，不會匯入' : '⚠️ 此題需人工確認，請決定是否匯入'}</span>
-                        <button onClick={() => toggleExclude(q)}
-                          className={`ml-3 px-3 py-1 rounded-full text-xs font-medium border transition ${isExcluded ? 'bg-green-100 border-green-400 text-green-800 hover:bg-green-200' : 'bg-red-100 border-red-400 text-red-700 hover:bg-red-200'}`}>
-                          {isExcluded ? '✓ 取消排除' : '✕ 排除此題'}
-                        </button>
+                      <div className={`mb-3 px-3 py-2 rounded-lg border text-sm ${isExcluded ? 'bg-red-50 border-red-300' : 'bg-yellow-50 border-yellow-300'}`}>
+                        <p className={`mb-2 font-medium ${isExcluded ? 'text-red-700' : 'text-yellow-800'}`}>
+                          ⚠️ 此題需人工確認，請決定是否匯入：
+                        </p>
+                        <div className="flex gap-2">
+                          <button onClick={() => { if (isExcluded) toggleExclude(q) }}
+                            className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition ${!isExcluded ? 'bg-green-600 text-white border-green-600' : 'bg-white text-gray-500 border-gray-300 hover:bg-green-50 hover:border-green-400 hover:text-green-700'}`}>
+                            ✓ 確認匯入
+                          </button>
+                          <button onClick={() => { if (!isExcluded) toggleExclude(q) }}
+                            className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition ${isExcluded ? 'bg-red-600 text-white border-red-600' : 'bg-white text-gray-500 border-gray-300 hover:bg-red-50 hover:border-red-400 hover:text-red-700'}`}>
+                            ✕ 排除此題
+                          </button>
+                        </div>
                       </div>
                     )}
                     <QuestionDetail q={q} />
