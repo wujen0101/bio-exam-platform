@@ -53,6 +53,7 @@ function UploadTab() {
   const [error, setError]         = useState('')
   const [previewIdx, setPreviewIdx] = useState(0)
   const [showOnlyReview, setShowOnlyReview] = useState(false)
+  const [excluded, setExcluded] = useState(new Set())
   const fileRef = useRef()
 
   // 切換單元時重置章節選擇
@@ -79,21 +80,33 @@ function UploadTab() {
   async function handleImport() {
     setStep(STEP.IMPORTING)
     try {
-      const result = await importQuestions(questions, 'teacher')
-      setImportResult(result); setStep(STEP.DONE)
+      const toImport = questions.filter((_, i) => !excluded.has(i))
+      const result = await importQuestions(toImport, 'teacher')
+      setImportResult({ ...result, excluded: excluded.size }); setStep(STEP.DONE)
     } catch (err) {
       setError(`匯入失敗：${err.message}`); setStep(STEP.PREVIEW)
     }
   }
 
+  function toggleExclude(q) {
+    const idx = questions.indexOf(q)
+    setExcluded(prev => {
+      const next = new Set(prev)
+      if (next.has(idx)) next.delete(idx)
+      else next.add(idx)
+      return next
+    })
+  }
+
   function reset() {
     setStep(STEP.IDLE); setQuestions([]); setWarnings([]); setImportResult(null)
-    setError(''); setFileName('')
+    setError(''); setFileName(''); setExcluded(new Set())
     if (fileRef.current) fileRef.current.value = ''
   }
 
   const needsReviewCount = questions.filter(q => q.needs_review).length
   const displayQuestions = showOnlyReview ? questions.filter(q => q.needs_review) : questions
+  const importCount = questions.length - excluded.size
 
   return (
     <div>
@@ -176,14 +189,39 @@ function UploadTab() {
                   <button onClick={() => setPreviewIdx(i => Math.min(displayQuestions.length - 1, i + 1))} disabled={previewIdx === displayQuestions.length - 1} className="px-2 py-1 rounded border disabled:opacity-40">▶</button>
                 </div>
               </div>
-              <QuestionDetail q={displayQuestions[previewIdx]} />
+              {(() => {
+                const q = displayQuestions[previewIdx]
+                const origIdx = questions.indexOf(q)
+                const isExcluded = excluded.has(origIdx)
+                return (
+                  <div>
+                    {q?.needs_review && (
+                      <div className={`flex items-center justify-between mb-3 px-3 py-2 rounded-lg border text-sm ${isExcluded ? 'bg-red-50 border-red-300 text-red-700' : 'bg-yellow-50 border-yellow-300 text-yellow-800'}`}>
+                        <span>{isExcluded ? '⛔ 此題已排除，不會匯入' : '⚠️ 此題需人工確認，請決定是否匯入'}</span>
+                        <button onClick={() => toggleExclude(q)}
+                          className={`ml-3 px-3 py-1 rounded-full text-xs font-medium border transition ${isExcluded ? 'bg-green-100 border-green-400 text-green-800 hover:bg-green-200' : 'bg-red-100 border-red-400 text-red-700 hover:bg-red-200'}`}>
+                          {isExcluded ? '✓ 取消排除' : '✕ 排除此題'}
+                        </button>
+                      </div>
+                    )}
+                    <QuestionDetail q={q} />
+                  </div>
+                )
+              })()}
+            </div>
+          )}
+          {excluded.size > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2 text-sm text-red-700 flex items-center justify-between">
+              <span>⛔ 已排除 <strong>{excluded.size}</strong> 題不匯入</span>
+              <button onClick={() => setExcluded(new Set())} className="text-xs underline hover:no-underline">全部取消排除</button>
             </div>
           )}
           <div className="flex gap-3">
             <button onClick={reset} className="flex-1 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50">重新上傳</button>
-            <button onClick={handleImport} disabled={questions.length === 0}
+            <button onClick={handleImport} disabled={importCount === 0}
               className="flex-1 py-2 rounded-lg bg-primary text-white font-medium hover:bg-green-800 disabled:opacity-40 transition">
-              確認匯入 {questions.length} 題 → Firebase
+              確認匯入 {importCount} 題 → Firebase
+              {excluded.size > 0 && <span className="text-xs opacity-75 ml-1">（排除 {excluded.size} 題）</span>}
             </button>
           </div>
         </div>
@@ -202,6 +240,7 @@ function UploadTab() {
           <h2 className="text-xl font-bold text-green-700 mb-2">匯入完成！</h2>
           <p className="text-gray-500 mb-1">成功寫入 <strong>{importResult.success}</strong> 題</p>
           {importResult.failed > 0 && <p className="text-red-500 text-sm mb-1">失敗 {importResult.failed} 題</p>}
+          {importResult.excluded > 0 && <p className="text-gray-400 text-sm mb-1">已排除 {importResult.excluded} 題未匯入</p>}
           <p className="text-gray-400 text-xs mb-6">同一範圍（單元／章節）重複上傳會更新，不同範圍各自獨立不覆蓋</p>
           <button onClick={reset} className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-green-800 transition">繼續上傳其他單元</button>
         </div>
