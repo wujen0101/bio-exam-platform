@@ -53,7 +53,7 @@ function UploadTab() {
   const [error, setError]         = useState('')
   const [previewIdx, setPreviewIdx] = useState(0)
   const [showOnlyReview, setShowOnlyReview] = useState(false)
-  const [confirmed, setConfirmed] = useState(new Set())  // needs_review 題目中已確認要匯入的
+  const [excluded, setExcluded] = useState(new Set())
   const fileRef = useRef()
 
   // 切換單元時重置章節選擇
@@ -80,18 +80,17 @@ function UploadTab() {
   async function handleImport() {
     setStep(STEP.IMPORTING)
     try {
-      const toImport = questions.filter((q, i) => !q.needs_review || confirmed.has(i))
-      const skipped = questions.filter((q, i) => q.needs_review && !confirmed.has(i)).length
+      const toImport = questions.filter((_, i) => !excluded.has(i))
       const result = await importQuestions(toImport, 'teacher')
-      setImportResult({ ...result, excluded: skipped }); setStep(STEP.DONE)
+      setImportResult({ ...result, excluded: excluded.size }); setStep(STEP.DONE)
     } catch (err) {
       setError(`匯入失敗：${err.message}`); setStep(STEP.PREVIEW)
     }
   }
 
-  function toggleConfirm(q) {
+  function toggleExclude(q) {
     const idx = questions.indexOf(q)
-    setConfirmed(prev => {
+    setExcluded(prev => {
       const next = new Set(prev)
       if (next.has(idx)) next.delete(idx)
       else next.add(idx)
@@ -101,14 +100,13 @@ function UploadTab() {
 
   function reset() {
     setStep(STEP.IDLE); setQuestions([]); setWarnings([]); setImportResult(null)
-    setError(''); setFileName(''); setConfirmed(new Set())
+    setError(''); setFileName(''); setExcluded(new Set())
     if (fileRef.current) fileRef.current.value = ''
   }
 
   const needsReviewCount = questions.filter(q => q.needs_review).length
   const displayQuestions = showOnlyReview ? questions.filter(q => q.needs_review) : questions
-  // 普通題全部匯入；needs_review 題目只匯入已確認的
-  const importCount = questions.filter((q, i) => !q.needs_review || confirmed.has(i)).length
+  const importCount = questions.length - excluded.size
 
   return (
     <div>
@@ -194,24 +192,16 @@ function UploadTab() {
               {(() => {
                 const q = displayQuestions[previewIdx]
                 const origIdx = questions.indexOf(q)
-                const isConfirmed = confirmed.has(origIdx)
+                const isExcluded = excluded.has(origIdx)
                 return (
                   <div>
                     {q?.needs_review && (
-                      <div className={`mb-3 px-3 py-2 rounded-lg border text-sm ${isConfirmed ? 'bg-green-50 border-green-300' : 'bg-yellow-50 border-yellow-300'}`}>
-                        <p className={`mb-2 font-medium ${isConfirmed ? 'text-green-700' : 'text-yellow-800'}`}>
-                          ⚠️ 此題需人工確認，請決定是否匯入：
-                        </p>
-                        <div className="flex gap-2">
-                          <button onClick={() => { if (!isConfirmed) toggleConfirm(q) }}
-                            className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition ${isConfirmed ? 'bg-green-600 text-white border-green-600' : 'bg-white text-gray-500 border-gray-300 hover:bg-green-50 hover:border-green-400 hover:text-green-700'}`}>
-                            ✓ 確認匯入
-                          </button>
-                          <button onClick={() => { if (isConfirmed) toggleConfirm(q) }}
-                            className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition ${!isConfirmed ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-500 border-gray-300 hover:bg-red-50 hover:border-red-400 hover:text-red-700'}`}>
-                            ✕ 排除此題
-                          </button>
-                        </div>
+                      <div className={`flex items-center justify-between mb-3 px-3 py-2 rounded-lg border text-sm ${isExcluded ? 'bg-red-50 border-red-300 text-red-700' : 'bg-yellow-50 border-yellow-300 text-yellow-800'}`}>
+                        <span>{isExcluded ? '⛔ 此題已排除，不會匯入' : '⚠️ 此題需人工確認，預設會匯入'}</span>
+                        <button onClick={() => toggleExclude(q)}
+                          className={`ml-3 px-3 py-1 rounded-full text-xs font-medium border transition ${isExcluded ? 'bg-green-100 border-green-400 text-green-800 hover:bg-green-200' : 'bg-red-100 border-red-400 text-red-700 hover:bg-red-200'}`}>
+                          {isExcluded ? '↩ 取消排除' : '✕ 排除此題'}
+                        </button>
                       </div>
                     )}
                     <QuestionDetail q={q} />
@@ -220,12 +210,10 @@ function UploadTab() {
               })()}
             </div>
           )}
-          {needsReviewCount > 0 && (
-            <div className={`rounded-xl px-4 py-2 text-sm flex items-center justify-between ${confirmed.size === needsReviewCount ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-yellow-50 border border-yellow-200 text-yellow-800'}`}>
-              <span>⚠️ 需確認題目：已確認 <strong>{confirmed.size}</strong> / {needsReviewCount} 題</span>
-              {confirmed.size > 0 && (
-                <button onClick={() => setConfirmed(new Set())} className="text-xs underline hover:no-underline ml-2">全部重設</button>
-              )}
+          {excluded.size > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2 text-sm text-red-700 flex items-center justify-between">
+              <span>⛔ 已排除 <strong>{excluded.size}</strong> 題不匯入</span>
+              <button onClick={() => setExcluded(new Set())} className="text-xs underline hover:no-underline">全部取消排除</button>
             </div>
           )}
           <div className="flex gap-3">
@@ -233,7 +221,7 @@ function UploadTab() {
             <button onClick={handleImport} disabled={importCount === 0}
               className="flex-1 py-2 rounded-lg bg-primary text-white font-medium hover:bg-green-800 disabled:opacity-40 transition">
               確認匯入 {importCount} 題 → Firebase
-              {needsReviewCount - confirmed.size > 0 && <span className="text-xs opacity-75 ml-1">（跳過 {needsReviewCount - confirmed.size} 題未確認）</span>}
+              {excluded.size > 0 && <span className="text-xs opacity-75 ml-1">（排除 {excluded.size} 題）</span>}
             </button>
           </div>
         </div>
