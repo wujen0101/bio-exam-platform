@@ -153,7 +153,7 @@ function parseSingleQuestion(block, unitId, chapterId, globalLineOffset) {
     // 英文原題標記（支援「英文原題」、「英文題：」、「英文版」等變體）
     if ((l.includes('英文原題') || /^📝\s*(英文題|英文版)/.test(l)) && enStart === -1) { enStart = i + 1 }
     // 中文版題目標記（支援「中文版題目」、「中文版：」、「中文題」等變體）
-    if ((l.includes('中文版題目') || /^📝\s*(中文版|中文題)/.test(l)) && zhStart === -1) { zhStart = i + 1 }
+    if ((l.includes('中文版題目') || l.includes('中文翻譯') || /^📝\s*(中文版|中文題)/.test(l)) && zhStart === -1) { zhStart = i + 1 }
     // 舊格式：「📝 題目」單獨一行作為章節標題，需排除「題目 N」標題行
     if (zhStart === -1 && enStart === -1 &&
         !l.includes('中文版') && !l.includes('英文') && !l.match(/題目\s*\d/) &&
