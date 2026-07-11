@@ -150,10 +150,10 @@ function parseSingleQuestion(block, unitId, chapterId, globalLineOffset) {
   let enStart = -1, zhStart = -1, detailStart = -1, memStart = -1, separatorIdx = -1
   for (let i = 1; i < block.length; i++) {
     const l = block[i]
-    // 英文原題標記（支援「英文原題」、「英文題：」、「英文版」等變體，以及 emoji 被解析為文字的情況）
-    if ((l.includes('英文原題') || /^(📝|emoji)\s*(英文題|英文版)/.test(l)) && enStart === -1) { enStart = i + 1 }
-    // 中文版題目標記（支援「中文版題目」、「中文版：」、「中文題」、「中文翻譯」等變體）
-    if ((l.includes('中文版題目') || l.includes('中文翻譯') || /^(📝|emoji)\s*(中文版|中文題)/.test(l)) && zhStart === -1) { zhStart = i + 1 }
+    // 英文原題標記（支援多種格式，含 emoji 被解析為文字、純英文 English 標記）
+    if ((l.includes('英文原題') || /^(📝|emoji)\s*(英文題|英文版)/.test(l) || l === 'English') && enStart === -1) { enStart = i + 1 }
+    // 中文版題目標記（支援多種格式，含純英文 Question 標記）
+    if ((l.includes('中文版題目') || l.includes('中文翻譯') || /^(📝|emoji)\s*(中文版|中文題)/.test(l) || l === 'Question') && zhStart === -1) { zhStart = i + 1 }
     // 舊格式：「📝 題目」或「emoji 題目」單獨一行，需排除「題目 N」標題行
     if (zhStart === -1 && enStart === -1 &&
         !l.includes('中文版') && !l.includes('英文') && !l.match(/題目\s*[A-Za-z一-鿿]?\d/) &&
