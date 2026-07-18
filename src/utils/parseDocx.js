@@ -154,10 +154,10 @@ function parseSingleQuestion(block, unitId, chapterId, globalLineOffset) {
     if ((l.includes('英文原題') || /^(📝|emoji)\s*(英文題|英文版)/.test(l) || l === 'English') && enStart === -1) { enStart = i + 1 }
     // 中文版題目標記（支援多種格式，含純英文 Question 標記）
     if ((l.includes('中文版題目') || l.includes('中文翻譯') || /^(📝|emoji)\s*(中文版|中文題)/.test(l) || l === 'Question') && zhStart === -1) { zhStart = i + 1 }
-    // 舊格式：「📝 題目」或「emoji 題目」單獨一行，需排除「題目 N」標題行
+    // 舊格式：「📝 題目」/「emoji 題目」/「[Q] 題目」單獨一行，需排除「題目 N」標題行
     if (zhStart === -1 && enStart === -1 &&
         !l.includes('中文版') && !l.includes('英文') && !l.match(/題目\s*[A-Za-z一-鿿]?\d/) &&
-        (l.trimStart().startsWith('題目') || (l.includes('題目') && (l.includes('📝') || l.trimStart().startsWith('emoji'))))) {
+        (l.trimStart().startsWith('題目') || (l.includes('題目') && (l.includes('📝') || l.trimStart().startsWith('emoji') || /^\[Q\]/.test(l))))) {
       zhStart = i + 1
     }
     // 新格式：「📝 {題目文字}」— 📝 後直接是題目內容，本行即為題目起始
