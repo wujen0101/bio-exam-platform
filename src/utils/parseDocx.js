@@ -110,7 +110,7 @@ export async function parseDocxQuestions(arrayBuffer, unitId, chapterId = null) 
 
   const questionStarts = []
   for (let i = 0; i < lines.length; i++) {
-    if (/^題目\s*[A-Za-z一-鿿]?\d+/.test(lines[i])) {
+    if (/^(?:[^\d\s（【]{1,4}\s+)?題目\s*[A-Za-z一-鿿]?\d+/.test(lines[i])) {
       questionStarts.push(i)
     }
   }
