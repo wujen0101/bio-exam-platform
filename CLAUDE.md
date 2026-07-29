@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **給接手的 agent**：開工前請先看 [`handoff.md`](./handoff.md)，裡面記錄目前主線工作進度與下一步該做什麼（不限 Claude Code，其他工具/agent 接手也請先看這份）。
+
 ## 專案簡介
 
 **後中醫生物學線上測驗平台** — 供後中醫考試學生進行生物學單元測驗與模擬考，支援即時題目解析、個人作答紀錄追蹤。老師可上傳 .docx 題庫卷自動匯入題目。
