@@ -1,11 +1,42 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { drawQuestions, getQuestionsByChapters } from '../firebase/questions'
-import { saveExamRecord, saveQuestionAnnotation } from '../firebase/records'
+import {
+  drawQuestions, getAllQuestions, getQuestionsByChapters, getQuestionsByUnit,
+} from '../firebase/questions'
+import {
+  getStudentRecords, saveExamRecord, saveQuestionAnnotation,
+} from '../firebase/records'
 import { useAuth } from '../context/AuthContext'
 import { UNITS, SCHOOL_RATIOS } from '../utils/units'
 
 const DEFAULT_COUNT = 20
+
+function shuffleQuestions(questions) {
+  const shuffled = [...questions]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled
+}
+
+function buildChapterStats(questions, records) {
+  const answeredIds = new Set(
+    records
+      .filter(record => (record.attempt_count ?? 0) > 0)
+      .map(record => record.question_id)
+  )
+
+  return questions.reduce((stats, question) => {
+    if (!question.chapter) return stats
+    const current = stats[question.chapter] ?? { total: 0, answered: 0, unanswered: 0 }
+    current.total += 1
+    if (answeredIds.has(question.id)) current.answered += 1
+    else current.unanswered += 1
+    stats[question.chapter] = current
+    return stats
+  }, {})
+}
 
 // ── 模擬考設定面板 ────────────────────────────────────────────────────────────
 function MockSetup({ onStart }) {
@@ -57,10 +88,38 @@ function MockSetup({ onStart }) {
 
 // ── 單元測驗設定面板 ──────────────────────────────────────────────────────────
 function UnitSetup({ preSelected, preChapters, onStart }) {
+  const { user } = useAuth()
   const [selectedUnits, setSelectedUnits] = useState(preSelected || [])
   const [selectedChapters, setSelectedChapters] = useState(preChapters || [])
   const [expandedUnits, setExpandedUnits] = useState(new Set())
   const [count, setCount] = useState(DEFAULT_COUNT)
+  const [chapterStats, setChapterStats] = useState({})
+  const [statsLoading, setStatsLoading] = useState(true)
+  const [statsError, setStatsError] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadChapterStats() {
+      setStatsLoading(true)
+      setStatsError(false)
+      try {
+        const [allQuestions, records] = await Promise.all([
+          getAllQuestions(),
+          user ? getStudentRecords(user.uid) : Promise.resolve([]),
+        ])
+        if (!cancelled) setChapterStats(buildChapterStats(allQuestions, records))
+      } catch (err) {
+        console.error('\u8f09\u5165\u7ae0\u7bc0\u984c\u6578\u8207\u4f5c\u7b54\u9032\u5ea6\u5931\u6557\uff1a', err)
+        if (!cancelled) setStatsError(true)
+      } finally {
+        if (!cancelled) setStatsLoading(false)
+      }
+    }
+
+    loadChapterStats()
+    return () => { cancelled = true }
+  }, [user])
 
   function toggleUnit(unitId, unitChapterIds) {
     if (selectedUnits.includes(unitId)) {
@@ -101,6 +160,9 @@ function UnitSetup({ preSelected, preChapters, onStart }) {
     <div className="max-w-2xl mx-auto mt-4">
       <h2 className="text-lg font-bold mb-1 text-primary">📝 選擇單元或章節</h2>
       <p className="text-xs text-gray-400 mb-4">勾選整個單元，或點 ▸ 展開後選擇特定章節</p>
+      <p className="text-xs text-gray-400 -mt-3 mb-4">
+        {user ? '\u51fa\u984c\u6703\u512a\u5148\u9078\u64c7\u672a\u4f5c\u7b54\u904e\u7684\u984c\u76ee' : '\u767b\u5165\u5f8c\u53ef\u4f9d\u500b\u4eba\u7d00\u9304\u512a\u5148\u62bd\u672a\u4f5c\u7b54\u984c\u76ee'}
+      </p>
       <div className="space-y-2 mb-5">
         {UNITS.map(u => {
           const isUnitSelected = selectedUnits.includes(u.id)
@@ -155,20 +217,36 @@ function UnitSetup({ preSelected, preChapters, onStart }) {
                 <div className="border-t border-gray-100 px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                   {u.chapters.map(ch => {
                     const isChSelected = selectedChapters.includes(ch.id)
+                    const stats = chapterStats[ch.id] ?? { total: 0, answered: 0, unanswered: 0 }
                     return (
                       <button
                         key={ch.id}
                         onClick={() => toggleChapter(ch.id, u.id)}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-left transition text-xs
+                        className={`flex items-start gap-2 px-3 py-2 rounded-lg border text-left transition text-xs
                           ${isChSelected
                             ? 'border-primary bg-green-50 text-primary'
                             : 'border-gray-200 hover:border-gray-300 text-gray-600'}`}
                       >
-                        <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0
+                        <span className={`w-4 h-4 mt-0.5 rounded border flex items-center justify-center shrink-0
                           ${isChSelected ? 'border-primary bg-primary' : 'border-gray-300'}`}>
                           {isChSelected && <span className="text-white text-[10px]">✓</span>}
                         </span>
-                        <span>Ch{ch.no} {ch.zh}</span>
+                        <span className="min-w-0">
+                          <span className="block">Ch{ch.no} {ch.zh}</span>
+                          <span className="block mt-0.5 text-[11px] text-gray-400">
+                            {statsLoading
+                              ? '\u984c\u6578\u8f09\u5165\u4e2d\u2026'
+                              : statsError
+                                ? '\u984c\u6578\u66ab\u6642\u7121\u6cd5\u8f09\u5165'
+                                : <>
+                                    {'\u5171 '}{stats.total}{' \u984c\u30fb'}
+                                    <span className="text-green-600">
+                                      {'\u5df2\u4f5c\u7b54 '}{stats.answered}
+                                    </span>
+                                    {'\u30fb\u672a\u4f5c\u7b54 '}{stats.unanswered}
+                                  </>}
+                          </span>
+                        </span>
                       </button>
                     )
                   })}
@@ -467,13 +545,30 @@ export default function ExamPage() {
           ? await getQuestionsByChapters(chapterIds)
           : []
         // 單元模式：抓整個單元題目
-        const unitQs = unitIds.length > 0
-          ? await drawQuestions(unitIds, count, ratios)
-          : []
+        const unitQs = unitIds.length === 0
+          ? []
+          : mode === 'mock'
+            ? await drawQuestions(unitIds, count, ratios)
+            : (await Promise.all(unitIds.map(getQuestionsByUnit))).flat()
         // 合併、去重、洗牌、取 count 題
         const seen = new Set()
         const pool = [...chapterQs, ...unitQs].filter(q => seen.has(q.id) ? false : seen.add(q.id))
-        qs = pool.sort(() => Math.random() - 0.5).slice(0, count)
+        if (mode === 'unit' && user) {
+          const records = await getStudentRecords(user.uid)
+          const answeredIds = new Set(
+            records
+              .filter(record => (record.attempt_count ?? 0) > 0)
+              .map(record => record.question_id)
+          )
+          const unanswered = pool.filter(q => !answeredIds.has(q.id))
+          const answered = pool.filter(q => answeredIds.has(q.id))
+          qs = [
+            ...shuffleQuestions(unanswered),
+            ...shuffleQuestions(answered),
+          ].slice(0, count)
+        } else {
+          qs = shuffleQuestions(pool).slice(0, count)
+        }
       }
 
       if (qs.length === 0) {
